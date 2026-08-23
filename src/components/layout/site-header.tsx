@@ -31,6 +31,9 @@ export function SiteHeader() {
             <Crown aria-hidden className="h-4.5 w-4.5" />
           </span>
           PDFKing
+          <span className="text-[11px] font-medium font-normal tracking-wide text-slate-400 dark:text-slate-500">
+            by Jorge
+          </span>
         </Link>
 
         <nav aria-label="Hauptnavigation" className="hidden items-center gap-1 sm:flex">
