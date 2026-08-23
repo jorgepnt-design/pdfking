@@ -212,12 +212,38 @@ export async function addHeaderFooter(
   return saveDocument(doc);
 }
 
-export interface WatermarkOptions {
+interface WatermarkBaseOptions {
+  opacity: number;
+  rotationDegrees: number;
+}
+
+export interface TextWatermarkOptions extends WatermarkBaseOptions {
+  kind: "text";
   text: string;
   fontSize: number;
   color: string;
-  opacity: number;
-  rotationDegrees: number;
+}
+
+export interface ImageWatermarkOptions extends WatermarkBaseOptions {
+  kind: "image";
+  imageBytes: Uint8Array;
+  imageType: "image/png" | "image/jpeg";
+  scalePercent: number;
+}
+
+export type WatermarkOptions = TextWatermarkOptions | ImageWatermarkOptions;
+
+function centeredRotatedPosition(
+  pageWidth: number,
+  pageHeight: number,
+  contentWidth: number,
+  contentHeight: number,
+  rotationDegrees: number,
+): { x: number; y: number } {
+  const radians = (rotationDegrees * Math.PI) / 180;
+  const centerX = (contentWidth / 2) * Math.cos(radians) - (contentHeight / 2) * Math.sin(radians);
+  const centerY = (contentWidth / 2) * Math.sin(radians) + (contentHeight / 2) * Math.cos(radians);
+  return { x: pageWidth / 2 - centerX, y: pageHeight / 2 - centerY };
 }
 
 export async function addWatermark(
@@ -225,21 +251,57 @@ export async function addWatermark(
   options: WatermarkOptions,
 ): Promise<Uint8Array> {
   const doc = await loadPdfDocument(bytes);
-  const font = await doc.embedFont(StandardFonts.HelveticaBold);
-  const color = hexToRgb(options.color);
+  const font = options.kind === "text" ? await doc.embedFont(StandardFonts.HelveticaBold) : null;
+  const color = options.kind === "text" ? hexToRgb(options.color) : null;
+  const image =
+    options.kind === "image"
+      ? options.imageType === "image/png"
+        ? await doc.embedPng(options.imageBytes)
+        : await doc.embedJpg(options.imageBytes)
+      : null;
 
   for (const page of doc.getPages()) {
     const { width, height } = page.getSize();
-    const textWidth = font.widthOfTextAtSize(options.text, options.fontSize);
-    page.drawText(options.text, {
-      x: (width - textWidth) / 2,
-      y: (height - options.fontSize) / 2,
-      size: options.fontSize,
-      font,
-      color: rgb(color.r, color.g, color.b),
-      opacity: options.opacity,
-      rotate: degrees(options.rotationDegrees),
-    });
+    if (options.kind === "text" && font && color) {
+      const textWidth = font.widthOfTextAtSize(options.text, options.fontSize);
+      const position = centeredRotatedPosition(
+        width,
+        height,
+        textWidth,
+        options.fontSize,
+        options.rotationDegrees,
+      );
+      page.drawText(options.text, {
+        ...position,
+        size: options.fontSize,
+        font,
+        color: rgb(color.r, color.g, color.b),
+        opacity: options.opacity,
+        rotate: degrees(options.rotationDegrees),
+      });
+    }
+
+    if (options.kind === "image" && image) {
+      const requestedWidth = width * (options.scalePercent / 100);
+      const requestedHeight = requestedWidth * (image.height / image.width);
+      const fitFactor = Math.min(1, height / requestedHeight);
+      const imageWidth = requestedWidth * fitFactor;
+      const imageHeight = requestedHeight * fitFactor;
+      const position = centeredRotatedPosition(
+        width,
+        height,
+        imageWidth,
+        imageHeight,
+        options.rotationDegrees,
+      );
+      page.drawImage(image, {
+        ...position,
+        width: imageWidth,
+        height: imageHeight,
+        opacity: options.opacity,
+        rotate: degrees(options.rotationDegrees),
+      });
+    }
   }
   return saveDocument(doc);
 }
