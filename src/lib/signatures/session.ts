@@ -2,6 +2,7 @@
 
 import { AppError } from "../types";
 import { fromBase64, toBase64 } from "./encoding";
+import { getSignatureSalt, saveSignatureSalt } from "./store";
 
 const SALT_STORAGE_KEY = "pdfking.signature.salt";
 const PBKDF2_ITERATIONS = 250_000;
@@ -19,18 +20,50 @@ export function isSessionUnlocked(): boolean {
   return sessionKey !== null;
 }
 
-function getOrCreateSalt(): Uint8Array {
-  const existing = localStorage.getItem(SALT_STORAGE_KEY);
-  if (existing) return fromBase64(existing);
+async function getOrCreateSalt(): Promise<Uint8Array> {
+  let localSalt: string | null = null;
+  try {
+    localSalt = localStorage.getItem(SALT_STORAGE_KEY);
+  } catch {
+    // IndexedDB bleibt der maßgebliche Speicher, falls localStorage gesperrt ist.
+  }
+
+  let databaseSalt: string | null = null;
+  try {
+    databaseSalt = await getSignatureSalt();
+  } catch {
+    // Fallback für Testumgebungen oder Browser ohne IndexedDB.
+  }
+
+  const existing = databaseSalt ?? localSalt;
+  if (existing) {
+    // Bestehende Installationen migrieren und beide Kopien reparieren.
+    if (!databaseSalt) await saveSignatureSalt(existing).catch(() => undefined);
+    if (!localSalt) {
+      try {
+        localStorage.setItem(SALT_STORAGE_KEY, existing);
+      } catch {
+        // Die IndexedDB-Kopie reicht für die Entschlüsselung aus.
+      }
+    }
+    return fromBase64(existing);
+  }
+
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  localStorage.setItem(SALT_STORAGE_KEY, toBase64(salt));
+  const encoded = toBase64(salt);
+  await saveSignatureSalt(encoded).catch(() => undefined);
+  try {
+    localStorage.setItem(SALT_STORAGE_KEY, encoded);
+  } catch {
+    // Die IndexedDB-Kopie reicht für die Entschlüsselung aus.
+  }
   return salt;
 }
 
 /** Leitet den Sitzungsschlüssel aus der Passphrase ab (PBKDF2, SHA-256). */
 export async function unlockSignatureStore(passphrase: string): Promise<void> {
   if (!passphrase) throw new AppError("INVALID_TYPE", "Bitte gib eine Passphrase ein.");
-  const salt = getOrCreateSalt() as unknown as BufferSource;
+  const salt = (await getOrCreateSalt()) as unknown as BufferSource;
   const keyMaterial = await subtle().importKey(
     "raw",
     new TextEncoder().encode(passphrase),
