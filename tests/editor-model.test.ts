@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { HistoryStore, createTextElement, moveElement } from "../src/lib/editor/model";
+import {
+  HistoryStore,
+  createImageElement,
+  createTextElement,
+  moveElement,
+  resizeImageElement,
+} from "../src/lib/editor/model";
 import { DEFAULT_EDITOR_STYLE } from "../src/lib/editor/model";
 
 describe("HistoryStore", () => {
@@ -103,5 +109,24 @@ describe("Element-Fabriken", () => {
       x: 8,
       y: 8,
     });
+  });
+
+  it("skaliert Bilder proportional über einen Eckgriff", () => {
+    const image = createImageElement(0, 100, 80, "data:image/png;base64,AA==", 3);
+    const resized = resizeImageElement(image, "se", 90, 10, 600, 800);
+
+    expect(resized.width).toBe(270);
+    expect(resized.height).toBe(90);
+    expect(resized.x).toBe(100);
+    expect(resized.y).toBe(80);
+  });
+
+  it("hält Bilder beim Skalieren innerhalb der Seite", () => {
+    const image = createImageElement(0, 100, 80, "data:image/png;base64,AA==", 3);
+    const resized = resizeImageElement(image, "nw", -500, -500, 600, 800);
+
+    expect(resized.x).toBeGreaterThanOrEqual(0);
+    expect(resized.y).toBeGreaterThanOrEqual(0);
+    expect(resized.width / resized.height).toBeCloseTo(3);
   });
 });

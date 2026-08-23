@@ -218,6 +218,48 @@ export function createImageElement(
   };
 }
 
+export type ImageResizeHandle = "nw" | "ne" | "sw" | "se";
+
+export function resizeImageElement(
+  element: ImageElement,
+  handle: ImageResizeHandle,
+  dx: number,
+  dy: number,
+  pageWidth: number,
+  pageHeight: number,
+): ImageElement {
+  const horizontalDelta = handle.includes("e") ? dx : -dx;
+  const verticalDelta = handle.includes("s") ? dy : -dy;
+  const horizontalFactor = (element.width + horizontalDelta) / element.width;
+  const verticalFactor = (element.height + verticalDelta) / element.height;
+  const factor =
+    Math.abs(horizontalDelta / element.width) >= Math.abs(verticalDelta / element.height)
+      ? horizontalFactor
+      : verticalFactor;
+
+  const minFactor = Math.max(24 / element.width, 12 / element.height);
+  const maxHorizontalFactor = handle.includes("w")
+    ? (element.x + element.width) / element.width
+    : (pageWidth - element.x) / element.width;
+  const maxVerticalFactor = handle.includes("n")
+    ? (element.y + element.height) / element.height
+    : (pageHeight - element.y) / element.height;
+  const boundedFactor = Math.max(
+    minFactor,
+    Math.min(factor, maxHorizontalFactor, maxVerticalFactor),
+  );
+  const width = element.width * boundedFactor;
+  const height = element.height * boundedFactor;
+
+  return {
+    ...element,
+    x: handle.includes("w") ? element.x + element.width - width : element.x,
+    y: handle.includes("n") ? element.y + element.height - height : element.y,
+    width,
+    height,
+  };
+}
+
 export function moveElement(element: EditorElement, dx: number, dy: number): EditorElement {
   element.x += dx;
   element.y += dy;

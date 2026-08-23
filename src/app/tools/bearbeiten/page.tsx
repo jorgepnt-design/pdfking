@@ -41,6 +41,8 @@ import {
   DEFAULT_EDITOR_STYLE,
   HistoryStore,
   moveElement,
+  resizeImageElement,
+  type ImageResizeHandle,
   type EditorStyleDefaults,
 } from "@/lib/editor/model";
 import { flattenEditorElements } from "@/lib/pdf/annotate";
@@ -107,10 +109,11 @@ function EditorInner() {
   const documentViewportRef = useRef<HTMLDivElement>(null);
   const [documentViewportWidth, setDocumentViewportWidth] = useState(760);
   const dragRef = useRef<{
-    mode: "create" | "move" | "ink";
+    mode: "create" | "move" | "resize" | "ink";
     id?: string;
     startPoint?: { x: number; y: number };
     original?: EditorElement;
+    resizeHandle?: ImageResizeHandle;
     lastPoint?: { x: number; y: number };
   } | null>(null);
   const [draftRect, setDraftRect] = useState<{
@@ -367,19 +370,22 @@ function EditorInner() {
     if (!point) return;
 
     if (tool === "select") {
-      const targetId = (event.target as HTMLElement)
-        .closest("[data-elem]")
-        ?.getAttribute("data-elem");
+      const target = event.target as HTMLElement;
+      const targetId = target.closest("[data-elem]")?.getAttribute("data-elem");
+      const resizeHandle = target
+        .closest("[data-resize-handle]")
+        ?.getAttribute("data-resize-handle") as ImageResizeHandle | null;
       if (targetId) {
         const element = (pages[pageIndex] ?? []).find((candidate) => candidate.id === targetId);
         if (element) {
           setSelectedId(targetId);
           historyRef.current.push(pages);
           dragRef.current = {
-            mode: "move",
+            mode: resizeHandle && element.kind === "image" ? "resize" : "move",
             id: targetId,
             startPoint: point,
             original: structuredClone(element),
+            resizeHandle: resizeHandle ?? undefined,
           };
           event.currentTarget.setPointerCapture(event.pointerId);
         }
@@ -480,6 +486,32 @@ function EditorInner() {
       return;
     }
 
+    if (
+      drag.mode === "resize" &&
+      drag.startPoint &&
+      drag.original?.kind === "image" &&
+      drag.resizeHandle &&
+      pageSize
+    ) {
+      const dx = point.x - drag.startPoint.x;
+      const dy = point.y - drag.startPoint.y;
+      const resized = resizeImageElement(
+        drag.original,
+        drag.resizeHandle,
+        dx,
+        dy,
+        pageSize.width,
+        pageSize.height,
+      );
+      setPages((current) => ({
+        ...current,
+        [pageIndex]: (current[pageIndex] ?? []).map((element) =>
+          element.id === drag.id ? resized : element,
+        ),
+      }));
+      return;
+    }
+
     if (drag.mode === "create" && drag.startPoint) {
       const start = drag.startPoint;
       setDraftRect({
@@ -541,8 +573,9 @@ function EditorInner() {
       setDraftRect(null);
     }
 
-    if (drag?.mode === "move") {
+    if (drag?.mode === "move" || drag?.mode === "resize") {
       forceRender((value) => value + 1);
+      syncHistoryFlags();
     }
   };
 
@@ -768,6 +801,13 @@ function EditorInner() {
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
             {selected ? `Ausgewählt: ${elementLabel(selected)}` : "Standardstil"}
           </h2>
+
+          {selected?.kind === "image" ? (
+            <InfoAlert title="Größe ändern">
+              Ziehe einen der blauen Eckpunkte. Das Seitenverhältnis der Unterschrift bleibt dabei
+              erhalten.
+            </InfoAlert>
+          ) : null}
 
           {selected?.kind === "text" ? (
             <>
@@ -1124,13 +1164,9 @@ function ElementsLayer({
             );
           case "image":
             return (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <div
                 key={element.id}
                 {...commonProps}
-                src={element.dataUrl}
-                alt="Eingefügtes Bild"
-                draggable={false}
                 style={{
                   left: element.x * scale,
                   top: element.y * scale,
@@ -1138,7 +1174,33 @@ function ElementsLayer({
                   height: element.height * scale,
                   cursor: "move",
                 }}
-              />
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={element.dataUrl}
+                  alt="Eingefügtes Bild"
+                  draggable={false}
+                  className="pointer-events-none block h-full w-full select-none"
+                />
+                {isSelected
+                  ? (["nw", "ne", "sw", "se"] as const).map((handle) => (
+                      <span
+                        key={handle}
+                        data-resize-handle={handle}
+                        aria-hidden
+                        className={`absolute h-3.5 w-3.5 touch-none rounded-full border-2 border-white bg-blue-700 shadow ${
+                          handle === "nw"
+                            ? "-top-2 -left-2 cursor-nwse-resize"
+                            : handle === "ne"
+                              ? "-top-2 -right-2 cursor-nesw-resize"
+                              : handle === "sw"
+                                ? "-bottom-2 -left-2 cursor-nesw-resize"
+                                : "-right-2 -bottom-2 cursor-nwse-resize"
+                        }`}
+                      />
+                    ))
+                  : null}
+              </div>
             );
           case "rect":
             return (
