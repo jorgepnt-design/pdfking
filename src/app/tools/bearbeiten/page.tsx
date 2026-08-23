@@ -104,6 +104,8 @@ function EditorInner() {
   // Interaktion
   const overlayRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const documentViewportRef = useRef<HTMLDivElement>(null);
+  const [documentViewportWidth, setDocumentViewportWidth] = useState(760);
   const dragRef = useRef<{
     mode: "create" | "move" | "ink";
     id?: string;
@@ -138,6 +140,21 @@ function EditorInner() {
     },
     [],
   );
+
+  useEffect(() => {
+    const viewport = documentViewportRef.current;
+    if (!jsDoc || !viewport || typeof ResizeObserver === "undefined") return;
+
+    const updateWidth = () => {
+      // 2rem entsprechen dem horizontalen Innenabstand der Vorschaufläche.
+      setDocumentViewportWidth(Math.max(240, viewport.clientWidth - 32));
+    };
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [jsDoc]);
 
   const openFile = async (files: File[]) => {
     if (processing.state.active) return;
@@ -561,6 +578,7 @@ function EditorInner() {
         title="PDF bearbeiten"
         description="Füge Texte, Bilder, Formen, Markierungen und Freihand hinzu – mit Vorschau, Rückgängig-Funktion und direktem Export."
         privacy="local"
+        wide
       >
         <FileDropzone onFiles={openFile} />
         <div className="mt-4">
@@ -574,15 +592,14 @@ function EditorInner() {
     );
   }
 
-  const displayWidth = pageSize
-    ? Math.min(760, (typeof window !== "undefined" ? window.innerWidth : 800) - 80) * zoom
-    : 600;
+  const displayWidth = pageSize ? Math.min(760, documentViewportWidth) * zoom : 600;
 
   return (
     <ToolShell
       title="PDF bearbeiten"
       description={`Dokument: ${pdfName} · ${jsDoc.numPages} Seiten · alle Änderungen bleiben lokal.`}
       privacy="local"
+      wide
     >
       {processing.error ? (
         <div className="mb-4">
@@ -590,7 +607,7 @@ function EditorInner() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[auto_16rem_18rem] xl:grid-cols-[auto_15rem_18rem]">
+      <div className="grid gap-4 lg:grid-cols-[11rem_minmax(0,1fr)_13rem] xl:grid-cols-[12rem_minmax(0,1fr)_14rem]">
         {/* Werkzeugleiste */}
         <aside
           aria-label="Werkzeuge"
@@ -654,7 +671,7 @@ function EditorInner() {
         </aside>
 
         {/* Zeichenfläche */}
-        <section aria-label="Dokumentseite" className="order-1 space-y-3 lg:order-2">
+        <section aria-label="Dokumentseite" className="order-1 min-w-0 space-y-3 lg:order-2">
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button
               variant="secondary"
@@ -691,7 +708,10 @@ function EditorInner() {
             </IconButton>
           </div>
 
-          <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-4 dark:border-slate-700 dark:bg-slate-900">
+          <div
+            ref={documentViewportRef}
+            className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-4 dark:border-slate-700 dark:bg-slate-900"
+          >
             <div className="relative mx-auto shadow-md" style={{ width: displayWidth }}>
               <canvas
                 ref={canvasRef}

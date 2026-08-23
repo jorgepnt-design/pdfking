@@ -19,15 +19,17 @@ export function ToolShell({
   privacy,
   children,
   backHref = "/",
+  wide = false,
 }: {
   title: string;
   description: string;
   privacy: PrivacyMode;
   children: ReactNode;
   backHref?: string;
+  wide?: boolean;
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pt-8 pb-16 sm:px-6">
+    <div className={`mx-auto w-full px-4 pt-8 pb-16 sm:px-6 ${wide ? "max-w-7xl" : "max-w-6xl"}`}>
       <Link
         href={backHref}
         className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
