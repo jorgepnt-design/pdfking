@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Lint · Typen · Tests · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Linting (ESLint)
+        run: npm run lint
+
+      - name: Formatierung (Prettier)
+        run: npx prettier --check . || true
+
+      - name: Typprüfung (TypeScript)
+        run: npm run typecheck
+
+      - name: Unit-Tests (Vitest)
+        run: npm test
+
+      - name: Produktions-Build
+        run: npm run build

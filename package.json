@@ -1,0 +1,55 @@
+{
+  "name": "pdfking",
+  "version": "0.1.0",
+  "private": false,
+  "description": "PDFKing – sichere PDF-Werkzeuge. Lokale Verarbeitung direkt im Browser.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jorgepnt-design/pdfking.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "@cantoo/pdf-lib": "^2.9.1",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-slider": "^1.4.7",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-tooltip": "^1.2.16",
+    "clsx": "^2.1.1",
+    "docx": "^9.7.1",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.33.0",
+    "next": "^16.3.2",
+    "pdfjs-dist": "^6.2.108",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.2",
+    "happy-dom": "^20.11.6",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.11"
+  }
+}
