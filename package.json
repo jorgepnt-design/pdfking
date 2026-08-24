@@ -21,7 +21,7 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/generate-icons.mjs"
+    "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/copy-tesseract-assets.mjs && node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.9.1",

@@ -1,12 +1,9 @@
 ﻿"use client";
 
-import type { CancellationToken } from "../types";
+import { AppError, type CancellationToken } from "../types";
 import { SimpleCancellation, yieldToUi } from "../utils";
 import { loadPdfJsDocument } from "./pdfjs";
 import { buildSearchablePdf } from "./convert";
-
-const TESSERACT_VERSION = "7.0.0";
-const CDN = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist`;
 
 export interface OcrWord {
   text: string;
@@ -28,13 +25,22 @@ interface TesseractWordLike {
 }
 
 async function createOcrWorker(lang: string) {
-  const { createWorker } = await import("tesseract.js");
-  return createWorker(lang, 1, {
-    workerPath: `${CDN}/worker.min.js`,
-    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v6.0.0",
-    langPath: "https://tessdata.projectnaptha.com/4.0.0",
-    logger: () => undefined,
-  });
+  try {
+    const { createWorker } = await import("tesseract.js");
+    return await createWorker(lang, 1, {
+      workerPath: "/tesseract/worker.min.js",
+      corePath: "/tesseract/core",
+      langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      logger: () => undefined,
+    });
+  } catch (error) {
+    console.error("OCR-Worker konnte nicht gestartet werden:", error);
+    throw new AppError(
+      "UNKNOWN",
+      "Die OCR-Komponenten konnten nicht geladen werden.",
+      "Bitte prüfe deine Internetverbindung und lade die Seite neu. Beim ersten Start werden die Sprachdaten einmalig heruntergeladen.",
+    );
+  }
 }
 
 /**
