@@ -11,6 +11,7 @@ export interface EditorDraft {
   pdfSize: number;
   pageIndex: number;
   pages: PageElements;
+  pageRotations?: Record<number, 0 | 180>;
   updatedAt: number;
 }
 

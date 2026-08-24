@@ -10,6 +10,7 @@ import {
   PenLine,
   Plus,
   Redo2,
+  RotateCw,
   Square,
   Strikethrough,
   Trash2,
@@ -89,6 +90,7 @@ function EditorInner() {
   const [pdfSize, setPdfSize] = useState(0);
   const pdfBytesRef = useRef<Uint8Array | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const [pageRotations, setPageRotations] = useState<Record<number, 0 | 180>>({});
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
   const [zoom, setZoom] = useState(1);
 
@@ -168,6 +170,7 @@ function EditorInner() {
         setPdfName(draft.pdfName);
         setPdfSize(draft.pdfSize);
         setPageIndex(draft.pageIndex);
+        setPageRotations(draft.pageRotations ?? {});
         setPages(draft.pages);
         pagesRef.current = draft.pages;
         historyRef.current.reset(draft.pages);
@@ -214,6 +217,7 @@ function EditorInner() {
       setPdfName(file.name);
       setPdfSize(file.size);
       setPageIndex(0);
+      setPageRotations({});
       setPages({});
       setSelectedId(null);
       setExportedBytes(null);
@@ -230,7 +234,10 @@ function EditorInner() {
     void (async () => {
       try {
         const page = await jsDoc.getPage(pageIndex + 1);
-        const viewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({
+          scale: 1,
+          rotation: (page.rotate + (pageRotations[pageIndex] ?? 0)) % 360,
+        });
         if (!cancelled) setPageSize({ width: viewport.width, height: viewport.height });
         page.cleanup();
       } catch {
@@ -240,7 +247,7 @@ function EditorInner() {
     return () => {
       cancelled = true;
     };
-  }, [jsDoc, pageIndex]);
+  }, [jsDoc, pageIndex, pageRotations]);
 
   // Signatur-Vorwahl per URL (?tool=signatur) – Effect folgt unterhalb der Definition.
   const openSignaturePicker = async () => {
@@ -301,9 +308,10 @@ function EditorInner() {
       pdfSize,
       pageIndex,
       pages: pagesRef.current,
+      pageRotations,
       updatedAt: Date.now(),
     });
-  }, [pageIndex, pdfName, pdfSize]);
+  }, [pageIndex, pageRotations, pdfName, pdfSize]);
 
   const manageSignatures = async () => {
     await processing.run("PDF-Entwurf wird gesichert …", async () => {
@@ -643,7 +651,12 @@ function EditorInner() {
   const exportPdf = () =>
     processing.run("Änderungen werden ins PDF übertragen …", async ({ report }) => {
       if (!pdfBytesRef.current) return null;
-      const bytes = await flattenEditorElements(pdfBytesRef.current, pages, report);
+      const bytes = await flattenEditorElements(
+        pdfBytesRef.current,
+        pages,
+        report,
+        pageRotations,
+      );
       setExportedBytes(bytes);
       return bytes;
     });
@@ -786,6 +799,21 @@ function EditorInner() {
               →
             </Button>
             <span className="mx-2 h-5 w-px bg-slate-300 dark:bg-slate-600" />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                setPageRotations((current) => ({
+                  ...current,
+                  [pageIndex]: current[pageIndex] === 180 ? 0 : 180,
+                }))
+              }
+              title="Aktuelle Seite um 180° drehen"
+            >
+              <RotateCw className="mr-1.5 h-4 w-4" />
+              180° drehen
+            </Button>
+            <span className="mx-2 h-5 w-px bg-slate-300 dark:bg-slate-600" />
             <IconButton
               label="Verkleinern"
               onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
@@ -817,6 +845,7 @@ function EditorInner() {
                 pageIndex={pageIndex}
                 canvasRef={canvasRef}
                 width={displayWidth}
+                rotation={pageRotations[pageIndex] ?? 0}
               />
               {/* Overlay */}
               <div
@@ -1020,7 +1049,11 @@ function EditorInner() {
           <Button
             className="w-full"
             onClick={exportPdf}
-            disabled={processing.state.active || Object.keys(pages).length === 0}
+            disabled={
+              processing.state.active ||
+              (Object.keys(pages).length === 0 &&
+                !Object.values(pageRotations).some((rotation) => rotation === 180))
+            }
           >
             Als PDF exportieren
           </Button>
@@ -1111,17 +1144,19 @@ function CanvasRenderer({
   pageIndex,
   canvasRef,
   width,
+  rotation,
 }: {
   jsDoc: PDFDocumentProxy;
   pageIndex: number;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   width: number;
+  rotation: 0 | 180;
 }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let cancelled = false;
-    void renderPageToCanvas(jsDoc, pageIndex, canvas, width)
+    void renderPageToCanvas(jsDoc, pageIndex, canvas, width, rotation)
       .then(() => {
         void cancelled;
       })
@@ -1129,7 +1164,7 @@ function CanvasRenderer({
     return () => {
       cancelled = true;
     };
-  }, [jsDoc, pageIndex, width, canvasRef]);
+  }, [jsDoc, pageIndex, width, canvasRef, rotation]);
   return null;
 }
 

@@ -1,4 +1,4 @@
-import { LineCapStyle, PDFDocument, rgb, StandardFonts } from "@cantoo/pdf-lib";
+import { degrees, LineCapStyle, PDFDocument, rgb, StandardFonts } from "@cantoo/pdf-lib";
 import type { FontFamily, PageElements } from "../types";
 import { hexToRgb } from "../utils";
 import { loadPdfDocument, saveDocument } from "./loadDocument";
@@ -54,13 +54,43 @@ export async function flattenEditorElements(
   pdfBytes: Uint8Array,
   pages: PageElements,
   onProgress?: (percent: number) => void,
+  pageRotations: Record<number, 0 | 180> = {},
 ): Promise<Uint8Array> {
   const pageIndices = Object.keys(pages)
     .map(Number)
     .filter((index) => (pages[index] ?? []).length > 0);
-  if (pageIndices.length === 0) return pdfBytes;
+  const rotatedPageIndices = Object.keys(pageRotations)
+    .map(Number)
+    .filter((index) => pageRotations[index] === 180);
+  if (pageIndices.length === 0 && rotatedPageIndices.length === 0) return pdfBytes;
 
-  const doc = await loadPdfDocument(pdfBytes);
+  const sourceDoc = await loadPdfDocument(pdfBytes);
+  let doc = sourceDoc;
+
+  if (rotatedPageIndices.length > 0) {
+    const normalizedDoc = await PDFDocument.create();
+    const rotated = new Set(rotatedPageIndices);
+    const sourcePages = sourceDoc.getPages();
+    for (let index = 0; index < sourcePages.length; index++) {
+      const sourcePage = sourcePages[index];
+      if (!rotated.has(index)) {
+        const [copiedPage] = await normalizedDoc.copyPages(sourceDoc, [index]);
+        normalizedDoc.addPage(copiedPage);
+        continue;
+      }
+      const { width, height } = sourcePage.getSize();
+      const embeddedPage = await normalizedDoc.embedPage(sourcePage);
+      const page = normalizedDoc.addPage([width, height]);
+      page.drawPage(embeddedPage, {
+        x: width,
+        y: height,
+        width,
+        height,
+        rotate: degrees(180),
+      });
+    }
+    doc = normalizedDoc;
+  }
   const fonts = await embedAllFonts(doc);
   const imageCache = new Map<string, Awaited<ReturnType<PDFDocument["embedPng"]>>>();
   const allPages = doc.getPages();
