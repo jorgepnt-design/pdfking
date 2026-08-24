@@ -42,4 +42,22 @@ describe("Wasserzeichen", () => {
     const document = await PDFDocument.load(result);
     expect(document.getPageCount()).toBe(1);
   });
+
+  it("berücksichtigt einen versetzten sichtbaren Seitenbereich", async () => {
+    const source = await PDFDocument.create();
+    const page = source.addPage([600, 800]);
+    page.setCropBox(100, 150, 300, 400);
+
+    const result = await addWatermark(await source.save(), {
+      kind: "text",
+      text: "MITTE",
+      fontSize: 36,
+      color: "#64748b",
+      opacity: 0.25,
+      rotationDegrees: -45,
+    });
+
+    const document = await PDFDocument.load(result);
+    expect(document.getPage(0).getCropBox()).toEqual({ x: 100, y: 150, width: 300, height: 400 });
+  });
 });

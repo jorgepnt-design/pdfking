@@ -234,8 +234,7 @@ export interface ImageWatermarkOptions extends WatermarkBaseOptions {
 export type WatermarkOptions = TextWatermarkOptions | ImageWatermarkOptions;
 
 function centeredRotatedPosition(
-  pageWidth: number,
-  pageHeight: number,
+  pageBox: { x: number; y: number; width: number; height: number },
   contentWidth: number,
   contentHeight: number,
   rotationDegrees: number,
@@ -243,7 +242,10 @@ function centeredRotatedPosition(
   const radians = (rotationDegrees * Math.PI) / 180;
   const centerX = (contentWidth / 2) * Math.cos(radians) - (contentHeight / 2) * Math.sin(radians);
   const centerY = (contentWidth / 2) * Math.sin(radians) + (contentHeight / 2) * Math.cos(radians);
-  return { x: pageWidth / 2 - centerX, y: pageHeight / 2 - centerY };
+  return {
+    x: pageBox.x + pageBox.width / 2 - centerX,
+    y: pageBox.y + pageBox.height / 2 - centerY,
+  };
 }
 
 export async function addWatermark(
@@ -261,12 +263,13 @@ export async function addWatermark(
       : null;
 
   for (const page of doc.getPages()) {
-    const { width, height } = page.getSize();
+    // PDF.js rendert den sichtbaren CropBox-Bereich. Der Export muss denselben Rahmen verwenden,
+    // da CropBox und MediaBox bei Scans, Kontoauszügen und zugeschnittenen PDFs oft abweichen.
+    const visibleBox = page.getCropBox();
     if (options.kind === "text" && font && color) {
       const textWidth = font.widthOfTextAtSize(options.text, options.fontSize);
       const position = centeredRotatedPosition(
-        width,
-        height,
+        visibleBox,
         textWidth,
         options.fontSize,
         options.rotationDegrees,
@@ -282,14 +285,13 @@ export async function addWatermark(
     }
 
     if (options.kind === "image" && image) {
-      const requestedWidth = width * (options.scalePercent / 100);
+      const requestedWidth = visibleBox.width * (options.scalePercent / 100);
       const requestedHeight = requestedWidth * (image.height / image.width);
-      const fitFactor = Math.min(1, height / requestedHeight);
+      const fitFactor = Math.min(1, visibleBox.height / requestedHeight);
       const imageWidth = requestedWidth * fitFactor;
       const imageHeight = requestedHeight * fitFactor;
       const position = centeredRotatedPosition(
-        width,
-        height,
+        visibleBox,
         imageWidth,
         imageHeight,
         options.rotationDegrees,
