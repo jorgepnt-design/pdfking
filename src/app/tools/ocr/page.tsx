@@ -71,7 +71,7 @@ export default function OcrPage() {
   return (
     <ToolShell
       title="OCR – Text erkennen & durchsuchbar machen"
-      description="Erkennt Text in gescannten Dokumenten mithilfe von WebAssembly – direkt in deinem Browser. Deutsch und Englisch werden unterstützt."
+      description="Erkennt Text in gescannten Dokumenten mithilfe von WebAssembly – direkt in deinem Browser. Deutsch, Englisch, Französisch und Portugiesisch werden unterstützt."
       privacy="local"
     >
       {processing.error ? (
@@ -102,6 +102,7 @@ export default function OcrPage() {
                 { value: "eng", label: "Englisch" },
                 { value: "deu+eng", label: "Deutsch + Englisch" },
                 { value: "fra", label: "Französisch" },
+                { value: "por", label: "Portugiesisch" },
               ]}
             />
             <RadioGroupField
