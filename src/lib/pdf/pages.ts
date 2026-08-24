@@ -266,13 +266,17 @@ export async function addWatermark(
     // PDF.js rendert den sichtbaren CropBox-Bereich. Der Export muss denselben Rahmen verwenden,
     // da CropBox und MediaBox bei Scans, Kontoauszügen und zugeschnittenen PDFs oft abweichen.
     const visibleBox = page.getCropBox();
+    // CSS dreht wegen der nach unten laufenden Y-Achse in die entgegengesetzte Richtung
+    // zum PDF-Koordinatensystem. Für einen identischen visuellen Winkel wird das Vorzeichen
+    // beim Export daher umgekehrt.
+    const pdfRotationDegrees = -options.rotationDegrees;
     if (options.kind === "text" && font && color) {
       const textWidth = font.widthOfTextAtSize(options.text, options.fontSize);
       const position = centeredRotatedPosition(
         visibleBox,
         textWidth,
         options.fontSize,
-        options.rotationDegrees,
+        pdfRotationDegrees,
       );
       page.drawText(options.text, {
         ...position,
@@ -280,7 +284,7 @@ export async function addWatermark(
         font,
         color: rgb(color.r, color.g, color.b),
         opacity: options.opacity,
-        rotate: degrees(options.rotationDegrees),
+        rotate: degrees(pdfRotationDegrees),
       });
     }
 
@@ -294,14 +298,14 @@ export async function addWatermark(
         visibleBox,
         imageWidth,
         imageHeight,
-        options.rotationDegrees,
+        pdfRotationDegrees,
       );
       page.drawImage(image, {
         ...position,
         width: imageWidth,
         height: imageHeight,
         opacity: options.opacity,
-        rotate: degrees(options.rotationDegrees),
+        rotate: degrees(pdfRotationDegrees),
       });
     }
   }
