@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Highlighter,
@@ -45,6 +45,7 @@ import {
   type ImageResizeHandle,
   type EditorStyleDefaults,
 } from "@/lib/editor/model";
+import { loadEditorDraft, saveEditorDraft } from "@/lib/editor/draft";
 import { flattenEditorElements } from "@/lib/pdf/annotate";
 import { loadPdfJsDocument, renderPageToCanvas } from "@/lib/pdf/pdfjs";
 import { decryptFromStorage, isSessionUnlocked } from "@/lib/signatures/session";
@@ -80,6 +81,7 @@ export default function BearbeitenPage() {
 
 function EditorInner() {
   const processing = useProcessing();
+  const router = useRouter();
 
   // Dokumentzustand
   const [jsDoc, setJsDoc] = useState<PDFDocumentProxy | null>(null);
@@ -143,6 +145,42 @@ function EditorInner() {
     },
     [],
   );
+
+  // Den aktiven Entwurf nach einer Rückkehr aus der Unterschriftenverwaltung wiederherstellen.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const shouldResume =
+          sessionStorage.getItem("pdfking.editor.resume") === "1" ||
+          new URLSearchParams(window.location.search).get("resume") === "1";
+        if (!shouldResume) return;
+        const draft = await loadEditorDraft();
+        if (!draft || cancelled) return;
+        const loaded = await loadPdfJsDocument(draft.pdfBytes);
+        if (cancelled) {
+          await loaded.destroy();
+          return;
+        }
+        pdfBytesRef.current = new Uint8Array(draft.pdfBytes);
+        setJsDoc(loaded.doc);
+        destroyRef.current = loaded.destroy;
+        setPdfName(draft.pdfName);
+        setPdfSize(draft.pdfSize);
+        setPageIndex(draft.pageIndex);
+        setPages(draft.pages);
+        pagesRef.current = draft.pages;
+        historyRef.current.reset(draft.pages);
+        syncHistoryFlags();
+        sessionStorage.removeItem("pdfking.editor.resume");
+      } catch {
+        // Ein beschädigter oder nicht verfügbarer Sitzungsentwurf blockiert den Editor nicht.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [syncHistoryFlags]);
 
   useEffect(() => {
     const viewport = documentViewportRef.current;
@@ -253,6 +291,27 @@ function EditorInner() {
     setPendingImage({ dataUrl, aspectRatio: ratio });
     setTool("image");
     setSignDialogOpen(false);
+  };
+
+  const persistCurrentDraft = useCallback(async () => {
+    if (!pdfBytesRef.current) return;
+    await saveEditorDraft({
+      pdfBytes: pdfBytesRef.current,
+      pdfName,
+      pdfSize,
+      pageIndex,
+      pages: pagesRef.current,
+      updatedAt: Date.now(),
+    });
+  }, [pageIndex, pdfName, pdfSize]);
+
+  const manageSignatures = async () => {
+    await processing.run("PDF-Entwurf wird gesichert …", async () => {
+      await persistCurrentDraft();
+      sessionStorage.setItem("pdfking.editor.resume", "1");
+      router.push("/tools/unterschreiben?returnTo=editor");
+      return true;
+    });
   };
 
   const handleImageUpload = async (files: File[]) => {
@@ -422,6 +481,7 @@ function EditorInner() {
           [pageIndex]: [...(current[pageIndex] ?? []), element],
         }));
         setSelectedId(element.id);
+        setPendingImage(null);
         setTool("select");
         break;
       }
@@ -651,7 +711,7 @@ function EditorInner() {
               key={item.id}
               type="button"
               onClick={() => {
-                if (item.id === "image" && !pendingImage) {
+                if (item.id === "image") {
                   void openSignaturePicker();
                   return;
                 }
@@ -964,12 +1024,13 @@ function EditorInner() {
           >
             Als PDF exportieren
           </Button>
-          <Link
-            href="/tools/unterschreiben"
+          <button
+            type="button"
+            onClick={() => void manageSignatures()}
             className="block text-center text-xs font-medium text-blue-700 hover:underline dark:text-blue-400"
           >
             Unterschriften verwalten →
-          </Link>
+          </button>
 
           {exportedBytes && (
             <ResultCard
@@ -1026,12 +1087,13 @@ function EditorInner() {
           ) : (
             <div className="space-y-3 text-sm">
               <p>Dein Unterschriftenspeicher ist gesperrt.</p>
-              <Link
-                href="/tools/unterschreiben"
+              <button
+                type="button"
+                onClick={() => void manageSignatures()}
                 className="inline-flex h-10 items-center rounded-lg bg-blue-700 px-4 font-semibold text-white hover:bg-blue-800"
               >
                 Zum Entsperren / Erstellen
-              </Link>
+              </button>
             </div>
           )}
         </DialogContent>

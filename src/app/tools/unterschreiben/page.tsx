@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eraser, LockKeyhole, LockOpen, PenTool, Trash2 } from "lucide-react";
+import { ArrowLeft, Eraser, LockKeyhole, LockOpen, PenTool, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FileDropzone } from "@/components/shared/file-dropzone";
 import { ProcessingOverlay } from "@/components/shared/processing-overlay";
@@ -36,6 +36,7 @@ import { validateImageFile } from "@/lib/validate";
 
 export default function UnterschreibenPage() {
   const processing = useProcessing();
+  const [returnToEditor, setReturnToEditor] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [passphrase, setPassphrase] = useState("");
   const [signatures, setSignatures] = useState<StoredSignatureMeta[]>([]);
@@ -70,6 +71,10 @@ export default function UnterschreibenPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => setUnlocked(isSessionUnlocked()), 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    setReturnToEditor(new URLSearchParams(window.location.search).get("returnTo") === "editor");
   }, []);
 
   useEffect(() => {
@@ -224,6 +229,15 @@ export default function UnterschreibenPage() {
       description="Zeichne, lade oder generiere deine Unterschrift. Sie wird ausschließlich lokal und AES-verschlüsselt in deinem Browser gespeichert."
       privacy="local"
     >
+      {returnToEditor ? (
+        <Link
+          href="/tools/bearbeiten?resume=1"
+          className="mb-5 inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Zurück zum PDF
+        </Link>
+      ) : null}
       {processing.error ? (
         <ErrorAlert error={processing.error} onDismiss={processing.clearError} />
       ) : null}
