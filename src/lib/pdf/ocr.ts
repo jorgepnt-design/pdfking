@@ -24,22 +24,54 @@ interface TesseractWordLike {
   bbox?: { x0: number; y0: number; x1: number; y1: number };
 }
 
-async function createOcrWorker(lang: string) {
+interface TesseractProgress {
+  status?: string;
+  progress?: number;
+}
+
+const OCR_STATUS_LABELS: Record<string, string> = {
+  "loading tesseract core": "OCR-Kern wird geladen …",
+  "initializing tesseract": "OCR-Kern wird initialisiert …",
+  "loading language traineddata": "Sprachdaten werden geladen …",
+  "initializing api": "Spracherkennung wird vorbereitet …",
+};
+
+async function createOcrWorker(
+  lang: string,
+  onProgress?: (percent: number, label: string) => void,
+) {
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const { createWorker } = await import("tesseract.js");
-    return await createWorker(lang, 1, {
+    const languages = lang.includes("+") ? lang.split("+") : lang;
+    const workerPromise = createWorker(languages, 1, {
       workerPath: "/tesseract/worker.min.js",
       corePath: "/tesseract/core",
-      langPath: "https://tessdata.projectnaptha.com/4.0.0",
-      logger: () => undefined,
+      logger: (message: TesseractProgress) => {
+        const label = OCR_STATUS_LABELS[message.status ?? ""];
+        if (!label) return;
+        const detail = Math.round(Math.max(0, Math.min(1, message.progress ?? 0)) * 8);
+        onProgress?.(Math.max(1, detail), label);
+      },
     });
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        timedOut = true;
+        reject(new Error("OCR-Start hat das Zeitlimit überschritten."));
+      }, 120_000);
+    });
+    workerPromise.then((worker) => timedOut && void worker.terminate()).catch(() => undefined);
+    return await Promise.race([workerPromise, timeout]);
   } catch (error) {
     console.error("OCR-Worker konnte nicht gestartet werden:", error);
     throw new AppError(
       "UNKNOWN",
       "Die OCR-Komponenten konnten nicht geladen werden.",
-      "Bitte prüfe deine Internetverbindung und lade die Seite neu. Beim ersten Start werden die Sprachdaten einmalig heruntergeladen.",
+      "Bitte prüfe deine Internetverbindung und lade die Seite neu. Beim ersten Start können die Sprachdaten je nach Verbindung bis zu zwei Minuten benötigen.",
     );
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
@@ -54,7 +86,8 @@ export async function runOcr(
   onProgress?: (percent: number, label: string) => void,
   token: CancellationToken = new SimpleCancellation(),
 ): Promise<OcrPageResult[]> {
-  const worker = await createOcrWorker(language);
+  onProgress?.(1, "OCR-Komponenten werden geladen …");
+  const worker = await createOcrWorker(language, onProgress);
   const { doc: jsDoc, destroy } = await loadPdfJsDocument(pdfBytes);
   const results: OcrPageResult[] = [];
 
@@ -62,7 +95,7 @@ export async function runOcr(
     for (let pageIndex = 0; pageIndex < jsDoc.numPages; pageIndex++) {
       token.throwIfCancelled();
       onProgress?.(
-        Math.round((pageIndex / jsDoc.numPages) * 100),
+        10 + Math.round((pageIndex / jsDoc.numPages) * 90),
         `Seite ${pageIndex + 1} wird erkannt …`,
       );
 
@@ -102,7 +135,7 @@ export async function runOcr(
       canvas.width = 0;
 
       onProgress?.(
-        Math.round(((pageIndex + 1) / jsDoc.numPages) * 100),
+        10 + Math.round(((pageIndex + 1) / jsDoc.numPages) * 90),
         `Seite ${pageIndex + 1} von ${jsDoc.numPages} abgeschlossen`,
       );
       await yieldToUi();

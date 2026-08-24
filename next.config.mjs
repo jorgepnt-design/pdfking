@@ -8,7 +8,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self' blob: https://cdn.jsdelivr.net https://raw.githubusercontent.com https://tessdata.projectnaptha.com",
+      "connect-src 'self' blob: https://cdn.jsdelivr.net https://raw.githubusercontent.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
