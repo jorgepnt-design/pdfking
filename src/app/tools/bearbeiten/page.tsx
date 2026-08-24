@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  Eraser,
   Highlighter,
   ImagePlus,
   Minus,
@@ -33,6 +34,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useProcessing } from "@/hooks/useProcessing";
 import {
   createHighlightElement,
+  createEraserElement,
   createDecorationElement,
   createImageElement,
   createInkElement,
@@ -63,6 +65,7 @@ const TOOL_ITEMS: Array<{
   { id: "select", label: "Auswählen & verschieben", icon: MousePointer2 },
   { id: "text", label: "Textfeld einfügen", icon: Type },
   { id: "highlight", label: "Text hervorheben", icon: Highlighter },
+  { id: "eraser", label: "Radierer", icon: Eraser },
   { id: "rect", label: "Rechteck", icon: Square },
   { id: "line", label: "Linie", icon: Minus },
   { id: "arrow", label: "Pfeil", icon: ArrowRight },
@@ -510,6 +513,7 @@ function EditorInner() {
       }
       case "rect":
       case "highlight":
+      case "eraser":
       case "underline":
       case "strike": {
         dragRef.current = { mode: "create", startPoint: point };
@@ -610,6 +614,11 @@ function EditorInner() {
           break;
         case "highlight":
           element = createHighlightElement(pageIndex, draftRect.x, draftRect.y);
+          element.width = draftRect.width;
+          element.height = draftRect.height;
+          break;
+        case "eraser":
+          element = createEraserElement(pageIndex, draftRect.x, draftRect.y);
           element.width = draftRect.width;
           element.height = draftRect.height;
           break;
@@ -868,7 +877,7 @@ function EditorInner() {
                 {draftRect ? (
                   <div
                     aria-hidden
-                    className="pointer-events-none absolute border-2 border-dashed border-blue-600 bg-blue-500/10"
+                    className={`pointer-events-none absolute border-2 border-dashed border-blue-600 ${tool === "eraser" ? "bg-white" : "bg-blue-500/10"}`}
                     style={{
                       left: `${draftRect.x * (displayWidth / (pageSize?.width ?? 1))}px`,
                       top: `${draftRect.y * (displayWidth / (pageSize?.width ?? 1))}px`,
@@ -895,6 +904,13 @@ function EditorInner() {
             <InfoAlert title="Größe ändern">
               Ziehe einen der blauen Eckpunkte. Das Seitenverhältnis der Unterschrift bleibt dabei
               erhalten.
+            </InfoAlert>
+          ) : null}
+
+          {selected?.kind === "eraser" || tool === "eraser" ? (
+            <InfoAlert title="Radierer">
+              Ziehe einen weißen Bereich über den Text. Für vertrauliche Inhalte nutze bitte
+              „Schwärzen“, damit die Daten sicher entfernt werden.
             </InfoAlert>
           ) : null}
 
@@ -974,7 +990,7 @@ function EditorInner() {
             selected?.kind === "ink" ||
             selected?.kind === "underline" ||
             selected?.kind === "strike" ||
-            tool !== "select") && (
+            (tool !== "select" && tool !== "eraser")) && (
             <div>
               <FieldLabel htmlFor="prop-color">Farbe</FieldLabel>
               <input
@@ -1006,7 +1022,7 @@ function EditorInner() {
           {(selected?.kind === "rect" ||
             selected?.kind === "line" ||
             selected?.kind === "ink" ||
-            !selected) && (
+            (!selected && tool !== "eraser")) && (
             <div>
               <FieldLabel htmlFor="prop-stroke">Strichstärke</FieldLabel>
               <Slider
@@ -1178,6 +1194,8 @@ function elementLabel(element: EditorElement): string {
       return "Rechteck";
     case "highlight":
       return "Markierung";
+    case "eraser":
+      return "Radierer";
     case "line":
       return element.arrow ? "Pfeil" : "Linie";
     case "ink":
@@ -1330,6 +1348,22 @@ function ElementsLayer({
                   height: element.height * scale,
                   backgroundColor: element.color,
                   opacity: 0.35,
+                  cursor: "move",
+                }}
+              />
+            );
+          case "eraser":
+            return (
+              <div
+                key={element.id}
+                {...commonProps}
+                aria-label="Radierter Bereich"
+                style={{
+                  left: element.x * scale,
+                  top: element.y * scale,
+                  width: element.width * scale,
+                  height: element.height * scale,
+                  backgroundColor: "#ffffff",
                   cursor: "move",
                 }}
               />

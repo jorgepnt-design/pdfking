@@ -107,6 +107,10 @@ export interface HighlightElement extends BaseElement {
   color: string;
 }
 
+export interface EraserElement extends BaseElement {
+  kind: "eraser";
+}
+
 export interface LineElement extends BaseElement {
   kind: "line";
   x2: number;
@@ -135,6 +139,7 @@ export type EditorTool =
   | "line"
   | "arrow"
   | "highlight"
+  | "eraser"
   | "underline"
   | "strike"
   | "ink"
@@ -145,6 +150,7 @@ export type EditorElement =
   | ImageElement
   | RectElement
   | HighlightElement
+  | EraserElement
   | LineElement
   | InkStrokeElement
   | DecorationElement;

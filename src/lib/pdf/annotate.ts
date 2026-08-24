@@ -171,6 +171,17 @@ export async function flattenEditorElements(
           });
           break;
         }
+        case "eraser": {
+          page.drawRectangle({
+            x: element.x,
+            y: pageHeight - element.y - element.height,
+            width: element.width,
+            height: element.height,
+            color: rgb(1, 1, 1),
+            opacity: 1,
+          });
+          break;
+        }
         case "underline":
         case "strike": {
           const color = hexToRgb(element.color);

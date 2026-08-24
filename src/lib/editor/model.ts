@@ -1,5 +1,6 @@
 import type {
   EditorElement,
+  EraserElement,
   FontFamily,
   ImageElement,
   InkStrokeElement,
@@ -134,6 +135,18 @@ export function createHighlightElement(
     width: 200,
     height: 26,
     color: "#fde047",
+  };
+}
+
+export function createEraserElement(pageIndex: number, x: number, y: number): EraserElement {
+  return {
+    id: uid(),
+    kind: "eraser",
+    pageIndex,
+    x,
+    y,
+    width: 160,
+    height: 32,
   };
 }
 
