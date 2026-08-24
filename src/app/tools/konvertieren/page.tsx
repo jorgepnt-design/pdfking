@@ -120,8 +120,14 @@ export default function KonvertierenPage() {
     if (!textSource || docxBusy) return;
     setDocxBusy(true);
     try {
-      const blob = await pdfToSimpleDocx(textSource.bytes);
-      setDocxBlob(blob);
+      await processing.run(
+        "PDF-Seiten werden originalgetreu in Word übernommen …",
+        async ({ report }) => {
+          const blob = await pdfToSimpleDocx(textSource.bytes, report);
+          setDocxBlob(blob);
+          return blob;
+        },
+      );
     } catch (error) {
       console.error(error);
     } finally {
@@ -411,16 +417,17 @@ export default function KonvertierenPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <section className="flex flex-col space-y-3 rounded-xl border-2 border-green-500 p-5 dark:border-green-700">
                 <p className="w-fit rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-900/50 dark:text-green-100">
-                  Lokal · sofort · vereinfacht
+                  Lokal · originalgetreue Ansicht
                 </p>
-                <h3 className="font-semibold">Lokale Konvertierung</h3>
+                <h3 className="font-semibold">Layout und Bilder beibehalten</h3>
                 <p className="grow text-sm text-slate-600 dark:text-slate-400">
-                  Word-Datei mit der Textstruktur (Absätze je Seite). Kein Layout und keine Bilder –
-                  aber vollständig offline und ohne Upload.
+                  Übernimmt jede Seite einschließlich Layout, Bildern, Tabellen und Schriften in
+                  das Word-Dokument. Die Seiten sehen wie im PDF aus, sind aber nicht als einzelne
+                  Word-Elemente bearbeitbar.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                   <Button variant="secondary" onClick={exportSimpleDocxNow} disabled={docxBusy}>
-                    {docxBusy ? "Wird erstellt …" : "DOCX erstellen"}
+                    {docxBusy ? "Wird erstellt …" : "Layoutgetreues DOCX erstellen"}
                   </Button>
                   {docxBlob ? (
                     <DownloadButton

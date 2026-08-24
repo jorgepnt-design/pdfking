@@ -1,5 +1,6 @@
 ﻿import { PDFDocument, StandardFonts, rgb } from "@cantoo/pdf-lib";
 import JSZip from "jszip";
+import type { ISectionOptions } from "docx";
 import type { ImageExportFormat } from "../types";
 import { SimpleCancellation, yieldToUi } from "../utils";
 import { saveDocument } from "./loadDocument";
@@ -136,41 +137,74 @@ ${body}
 }
 
 /**
- * Lokale PDF-zu-DOCX-Ersatzfunktion: erzeugt ein vereinfachtes Word-Dokument
- * mit der extrahierten Textstruktur (kein Layout, keine Bilder).
- * Für hochwertige Konvertierung steht der optionale Serverdienst bereit.
+ * Erzeugt lokal ein ansichtsgetreues DOCX. Jede PDF-Seite wird vollständig gerendert und als
+ * hochauflösendes Seitenbild in einen gleich großen Word-Abschnitt gesetzt. So bleiben Schriften,
+ * Bilder, Tabellen und Positionen erhalten; die Inhalte sind im DOCX bewusst nicht einzeln editierbar.
  */
-export async function pdfToSimpleDocx(bytes: Uint8Array): Promise<Blob> {
-  const { Document, Packer, Paragraph, HeadingLevel, TextRun } = await import("docx");
-  const pages = await extractText(bytes);
+export async function pdfToSimpleDocx(
+  bytes: Uint8Array,
+  onProgress?: (percent: number) => void,
+): Promise<Blob> {
+  const { Document, ImageRun, Packer, Paragraph } = await import("docx");
+  const { doc: jsDoc, destroy } = await loadPdfJsDocument(bytes);
+  const sections: ISectionOptions[] = [];
+  const marginPt = 14.4; // 0,2 Zoll – verhindert zusätzliche Leerseiten durch den Absatzanker.
 
-  const children: Array<InstanceType<typeof Paragraph>> = [];
-  for (const page of pages) {
-    children.push(
-      new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: `Seite ${page.pageIndex + 1}`, color: "64748B", size: 20 })],
-      }),
-    );
-    for (const paragraph of page.text
-      .split(/\n{2,}/)
-      .map((p) => p.trim())
-      .filter(Boolean)) {
-      children.push(new Paragraph({ children: [new TextRun({ text: paragraph, size: 22 })] }));
-    }
-    if (!page.text) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: "[kein Text auf dieser Seite]", italics: true, color: "94A3B8" }),
-          ],
-        }),
+  try {
+    for (let pageIndex = 0; pageIndex < jsDoc.numPages; pageIndex++) {
+      const page = await jsDoc.getPage(pageIndex + 1);
+      const viewport = page.getViewport({ scale: 1 });
+      page.cleanup();
+
+      const canvas = await renderPageToOffscreenCanvas(jsDoc, pageIndex, 1600);
+      const imageBytes = await canvasToBytes(canvas, "image/png");
+      const availableWidthPt = Math.max(72, viewport.width - marginPt * 2);
+      const availableHeightPt = Math.max(72, viewport.height - marginPt * 2 - 10);
+      const scale = Math.min(
+        availableWidthPt / viewport.width,
+        availableHeightPt / viewport.height,
       );
+      const imageWidthPx = Math.round(viewport.width * scale * (96 / 72));
+      const imageHeightPx = Math.round(viewport.height * scale * (96 / 72));
+
+      sections.push({
+        properties: {
+          page: {
+            size: {
+              width: Math.round(viewport.width * 20),
+              height: Math.round(viewport.height * 20),
+            },
+            margin: {
+              top: Math.round(marginPt * 20),
+              right: Math.round(marginPt * 20),
+              bottom: Math.round(marginPt * 20),
+              left: Math.round(marginPt * 20),
+            },
+          },
+        },
+        children: [
+          new Paragraph({
+            spacing: { before: 0, after: 0, line: 1 },
+            children: [
+              new ImageRun({
+                data: imageBytes,
+                type: "png",
+                transformation: { width: imageWidthPx, height: imageHeightPx },
+              }),
+            ],
+          }),
+        ],
+      });
+      onProgress?.(Math.round(((pageIndex + 1) / jsDoc.numPages) * 90));
+      await yieldToUi();
     }
+  } finally {
+    await destroy();
   }
 
-  const doc = new Document({ sections: [{ children }] });
-  const buffer = await Packer.toBuffer(doc);
+  const document = new Document({ sections });
+  const buffer = await Packer.toBuffer(document);
+  onProgress?.(100);
   return new Blob([new Uint8Array(buffer)], {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   });
