@@ -2,11 +2,6 @@ name: CoroaPDF Android erstellen
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "android/**"
-      - ".github/workflows/build-android.yml"
 
 permissions:
   contents: read
@@ -29,27 +24,20 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Einmaligen Upload-Schlüssel erzeugen
+      - name: Gesicherten Upload-Schlüssel laden
         shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.COROAPDF_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.COROAPDF_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.COROAPDF_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.COROAPDF_KEY_ALIAS }}
         run: |
-          PASSWORD="$(openssl rand -base64 32 | tr -d '\n' | tr '/+' 'ab')"
-          echo "::add-mask::$PASSWORD"
-          keytool -genkeypair -v \
-            -keystore "$RUNNER_TEMP/coroapdf-upload.jks" \
-            -storepass "$PASSWORD" \
-            -keypass "$PASSWORD" \
-            -alias coroapdf-upload \
-            -keyalg RSA -keysize 4096 -validity 10000 \
-            -dname "CN=CoroaPDF, OU=Android, O=Jorge Pinto, C=DE"
-          {
-            echo "Diesen Schlüssel und dieses Passwort sicher aufbewahren."
-            echo "Alias: coroapdf-upload"
-            echo "Passwort: $PASSWORD"
-          } > "$RUNNER_TEMP/CoroaPDF-Schluessel-Passwort.txt"
+          test -n "$KEYSTORE_BASE64" || { echo "GitHub-Schlüssel COROAPDF_KEYSTORE_BASE64 fehlt."; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/coroapdf-upload.jks"
           echo "COROAPDF_KEYSTORE=$RUNNER_TEMP/coroapdf-upload.jks" >> "$GITHUB_ENV"
-          echo "COROAPDF_STORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
-          echo "COROAPDF_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
-          echo "COROAPDF_KEY_ALIAS=coroapdf-upload" >> "$GITHUB_ENV"
+          echo "COROAPDF_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "COROAPDF_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "COROAPDF_KEY_ALIAS=${KEY_ALIAS:-coroapdf-upload}" >> "$GITHUB_ENV"
 
       - name: Signiertes Android App Bundle bauen
         working-directory: android
@@ -63,5 +51,3 @@ jobs:
           if-no-files-found: error
           path: |
             android/app/build/outputs/bundle/release/app-release.aab
-            ${{ runner.temp }}/coroapdf-upload.jks
-            ${{ runner.temp }}/CoroaPDF-Schluessel-Passwort.txt
