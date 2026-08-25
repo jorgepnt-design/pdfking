@@ -11,6 +11,7 @@ import {
   Lock,
   Minimize2,
   PenLine,
+  ScanLine,
   Scissors,
   Stamp,
   Unlock,
@@ -47,6 +48,16 @@ export const CATEGORY_ORDER: ToolCategory[] = [
 ];
 
 export const TOOLS: ToolDefinition[] = [
+  {
+    id: "scan",
+    title: "Dokument scannen",
+    description:
+      "Dokumente fotografieren, mehrere Seiten ordnen und als PDF speichern oder direkt bearbeiten.",
+    category: "bearbeiten",
+    href: "/tools/scannen",
+    icon: ScanLine,
+    privacy: "local",
+  },
   {
     id: "editor",
     title: "PDF bearbeiten",
