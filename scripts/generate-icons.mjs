@@ -1,6 +1,6 @@
 /**
  * CoroaPDF App-Icon-Generator
- * Zeichnet das Logo prozedural (Blauverlauf + Dokument mit Falte + goldene Krone)
+ * Zeichnet das gekrönte C-Monogramm in portugiesischem Grün mit rotem Akzent
  * und exportiert alle benötigten Größen als PNG – ohne externe Abhängigkeiten.
  */
 import { deflateSync } from "node:zlib";
@@ -72,15 +72,6 @@ function mix(a, b, t) {
   ];
 }
 
-/** Signierte Distanz zu einem abgerundeten Rechteck (negativ = innen). */
-function sdRoundBox(px, py, cx, cy, hw, hh, r) {
-  const qx = Math.abs(px - cx) - (hw - r);
-  const qy = Math.abs(py - cy) - (hh - r);
-  const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
-  const inside = Math.min(Math.max(qx, qy), 0);
-  return outside + inside - r;
-}
-
 /** Punkt im Dreieck? (Baryzentrisch) */
 function inTriangle(px, py, a, b, c) {
   const s1 = cross(a, b, px, py);
@@ -95,47 +86,33 @@ function cross(p, q, x, y) {
   return (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
 }
 
+function distanceToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
 /* ---------------- Layout (Anteile der Kantenlänge) ---------------- */
 
-const BG_A = hex("#4285f8");
-const BG_B = hex("#1633c4");
-const PAGE = hex("#ffffff");
-const PAGE_EDGE = hex("#dbe6ff");
-const FLAP = hex("#c3d7ff");
-const SHADOW = [12, 22, 80];
-const GOLD_TOP = hex("#ffe27a");
-const GOLD_BOT = hex("#f59e0b");
+const BG_A = hex("#0b8748");
+const BG_B = hex("#075f32");
+const WHITE = hex("#ffffff");
+const RED = hex("#e52535");
 
 const S = MASTER;
 
-// Dokument
-const PX0 = 0.235 * S;
-const PX1 = 0.785 * S;
-const PY0 = 0.21 * S;
-const PY1 = 0.89 * S;
-const PR = 0.05 * S;
-const FOLD = 0.085 * S;
-const foldX = PX1 - FOLD;
-const foldY = PY0 + FOLD;
-
-// Krone
-const CX = 0.51 * S;
-const BAND_CY = 0.505 * S;
-const BAND_HW = 0.165 * S;
-const BAND_HH = 0.03 * S;
-const BAND_R = 0.018 * S;
-const BASE_Y = BAND_CY - BAND_HH;
-const SPIKES = [
-  { apex: [CX - 0.12 * S, 0.395 * S], xl: CX - 0.168 * S, xr: CX - 0.062 * S },
-  { apex: [CX, 0.36 * S], xl: CX - 0.072 * S, xr: CX + 0.072 * S },
-  { apex: [CX + 0.12 * S, 0.395 * S], xl: CX + 0.062 * S, xr: CX + 0.168 * S }
+const CX = 0.49 * S;
+const CY = 0.56 * S;
+const OUTER_R = 0.285 * S;
+const INNER_R = 0.165 * S;
+const CROWN_BASE_Y = 0.36 * S;
+const CROWN_POINTS = [
+  [[0.25 * S, CROWN_BASE_Y], [0.25 * S, 0.255 * S], [0.39 * S, CROWN_BASE_Y]],
+  [[0.36 * S, CROWN_BASE_Y], [0.49 * S, 0.15 * S], [0.62 * S, CROWN_BASE_Y]],
+  [[0.59 * S, CROWN_BASE_Y], [0.73 * S, 0.255 * S], [0.73 * S, CROWN_BASE_Y]],
 ];
-const BALL_R = 0.027 * S;
-
-function goldColor(py) {
-  const t = Math.min(1, Math.max(0, (py - 0.34 * S) / (0.19 * S)));
-  return mix(GOLD_TOP, GOLD_BOT, t);
-}
 
 /* ---------------- Master-Rendering (2048², Kanten später geglättet) ---------------- */
 
@@ -145,59 +122,31 @@ for (let y = 0; y < S; y++) {
   for (let x = 0; x < S; x++) {
     const i = (y * S + x) * 4;
 
-    // 1) Diagonaler Hintergrundverlauf + Randabdunklung
+    // 1) Portugiesisch grüner Hintergrund
     let col = mix(BG_A, BG_B, (x / S) * 0.45 + (y / S) * 0.55);
     const edge = Math.min(x, y, S - 1 - x, S - 1 - y) / S;
     if (edge < 0.06) {
-      col = mix(col, hex("#101d63"), (1 - edge / 0.06) * 0.25);
+      col = mix(col, hex("#034a27"), (1 - edge / 0.06) * 0.2);
     }
 
-    // 2) Weicher Schatten hinter dem Dokument
-    const shD = sdRoundBox(x, y, CX + 0.014 * S, 0.597 * S, (PX1 - PX0) / 2, (PY1 - PY0) / 2, PR);
-    if (shD < 0.05 * S) {
-      const a = Math.max(0, 1 - shD / (0.05 * S)) ** 2 * 0.42;
-      col = mix(col, SHADOW, a);
+    // 2) Weißes C mit einer klaren Öffnung rechts
+    const radius = Math.hypot(x - CX, y - CY);
+    const inRing = radius <= OUTER_R && radius >= INNER_R;
+    const inOpening = x > CX + 0.11 * S && Math.abs(y - CY) < 0.145 * S;
+    if (inRing && !inOpening) col = WHITE;
+
+    // 3) Drei Kronenspitzen wachsen aus dem oberen C-Bogen
+    if (y >= CROWN_BASE_Y - 0.035 * S && y <= CROWN_BASE_Y + 0.025 * S && x > 0.245 * S && x < 0.735 * S) {
+      col = WHITE;
+    }
+    for (const triangle of CROWN_POINTS) {
+      if (inTriangle(x, y, triangle[0], triangle[1], triangle[2])) col = WHITE;
     }
 
-    // 3) Dokument (obere rechte Ecke gefaltet abgeschnitten)
-    const dPage = sdRoundBox(x, y, (PX0 + PX1) / 2, (PY0 + PY1) / 2, (PX1 - PX0) / 2, (PY1 - PY0) / 2, PR);
-    const inCut = x > foldX && y < foldY && x - foldX > foldY - y;
-    if (dPage < 0 && !inCut) {
-      col = PAGE;
-      if (y > PY1 - 0.006 * S && dPage > -0.006 * S) col = mix(PAGE, PAGE_EDGE, 0.8);
+    // 4) Roter Akzent verlängert den unteren Endpunkt des C
+    if (distanceToSegment(x, y, 0.66 * S, 0.745 * S, 0.79 * S, 0.675 * S) < 0.035 * S) {
+      col = RED;
     }
-
-    // Hundeohr-Klappe über der gefalteten Ecke
-    if (
-      x >= foldX &&
-      x <= PX1 &&
-      y >= PY0 &&
-      y <= foldY &&
-      x - foldX >= foldY - y
-    ) {
-      col = FLAP;
-    }
-
-    // 4) Krone
-    let crown = false;
-    if (sdRoundBox(x, y, CX, BAND_CY, BAND_HW, BAND_HH, BAND_R) < 0) crown = true;
-    if (!crown) {
-      for (const sp of SPIKES) {
-        if (inTriangle(x, y, [sp.xl, BASE_Y], [sp.xr, BASE_Y], sp.apex)) {
-          crown = true;
-          break;
-        }
-      }
-    }
-    if (!crown) {
-      for (const sp of SPIKES) {
-        if ((x - sp.apex[0]) ** 2 + (y - sp.apex[1]) ** 2 < BALL_R * BALL_R) {
-          crown = true;
-          break;
-        }
-      }
-    }
-    if (crown) col = goldColor(y);
 
     img[i] = col[0];
     img[i + 1] = col[1];

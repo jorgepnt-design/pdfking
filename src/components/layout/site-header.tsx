@@ -1,8 +1,9 @@
 "use client";
 
-import { Crown, Menu, Moon, Sun } from "lucide-react";
+import { Menu, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { CoroaMark } from "@/components/brand/coroa-mark";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 
@@ -22,9 +23,7 @@ export function SiteHeader() {
           href="/"
           className="flex items-center gap-2 rounded-lg font-bold tracking-tight text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 dark:text-white"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-700 text-white">
-            <Crown aria-hidden className="h-4.5 w-4.5" />
-          </span>
+          <CoroaMark className="h-8 w-8 shrink-0" />
           CoroaPDF
           <span className="text-[11px] font-medium font-normal tracking-wide text-slate-400 dark:text-slate-500">
             by Jorge
