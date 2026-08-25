@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   DownloadCloud,
   Eraser,
+  Eye,
+  EyeOff,
   LockKeyhole,
   LockOpen,
   PenTool,
@@ -50,6 +52,7 @@ export default function UnterschreibenPage() {
   const [returnToEditor, setReturnToEditor] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [passphrase, setPassphrase] = useState("");
+  const [showPassphrase, setShowPassphrase] = useState(false);
   const [signatures, setSignatures] = useState<StoredSignatureMeta[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [nameInput, setNameInput] = useState("");
@@ -374,14 +377,31 @@ export default function UnterschreibenPage() {
           </p>
           <div>
             <FieldLabel htmlFor="passphrase">Passphrase</FieldLabel>
-            <Input
-              id="passphrase"
-              type="password"
-              value={passphrase}
-              autoComplete="off"
-              onChange={(event) => setPassphrase(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && unlock()}
-            />
+            <div className="relative">
+              <Input
+                id="passphrase"
+                type={showPassphrase ? "text" : "password"}
+                value={passphrase}
+                autoComplete="off"
+                className="pr-11"
+                onChange={(event) => setPassphrase(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && unlock()}
+              />
+              <button
+                type="button"
+                aria-label={showPassphrase ? "Passphrase ausblenden" : "Passphrase anzeigen"}
+                title={showPassphrase ? "Passphrase ausblenden" : "Passphrase anzeigen"}
+                aria-pressed={showPassphrase}
+                onClick={() => setShowPassphrase((visible) => !visible)}
+                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-lg text-slate-500 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 dark:text-slate-400 dark:hover:text-white"
+              >
+                {showPassphrase ? (
+                  <EyeOff aria-hidden className="h-5 w-5" />
+                ) : (
+                  <Eye aria-hidden className="h-5 w-5" />
+                )}
+              </button>
+            </div>
             <p id="passphrase-hint" className="mt-1 text-xs text-slate-500">
               Erste Nutzung? Denk dir eine aus – sie verschlüsselt ab jetzt alle Unterschriften.
             </p>
