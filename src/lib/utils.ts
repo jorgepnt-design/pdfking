@@ -41,6 +41,22 @@ export function downloadBytes(
 ): void {
   const blob =
     data instanceof Blob ? data : new Blob([data as unknown as BlobPart], { type: mime });
+
+  const androidDownloads = (
+    window as typeof window & {
+      CoroaPDFAndroid?: { saveBase64File: (base64: string, name: string, type: string) => void };
+    }
+  ).CoroaPDFAndroid;
+  if (androidDownloads) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const encoded = typeof reader.result === "string" ? reader.result.split(",")[1] : "";
+      if (encoded) androidDownloads.saveBase64File(encoded, filename, mime);
+    };
+    reader.readAsDataURL(blob);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

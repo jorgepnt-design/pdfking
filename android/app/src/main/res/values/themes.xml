@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.CoroaPDF" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:navigationBarColor">@color/coroa_green_dark</item>
+        <item name="android:statusBarColor">@color/coroa_green_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

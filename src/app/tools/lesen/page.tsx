@@ -23,6 +23,7 @@ import { saveEditorDraft } from "@/lib/editor/draft";
 import type { FormFieldInfo, FormValues } from "@/lib/pdf/forms";
 import { detectFormFields, fillForm } from "@/lib/pdf/forms";
 import { loadPdfJsDocument, renderPageToCanvas } from "@/lib/pdf/pdfjs";
+import { downloadBytes } from "@/lib/utils";
 
 interface LaunchFileHandle {
   getFile: () => Promise<File>;
@@ -32,6 +33,12 @@ declare global {
   interface Window {
     launchQueue?: {
       setConsumer: (consumer: (params: { files: LaunchFileHandle[] }) => void) => void;
+    };
+    CoroaPDFAndroid?: {
+      getIncomingPdfName: () => string;
+      consumeIncomingPdfBase64: () => string;
+      clearIncomingPdf: () => void;
+      saveBase64File: (base64: string, name: string, type: string) => void;
     };
   }
 }
@@ -65,6 +72,23 @@ export default function PdfReaderPage() {
       if (!handle) return;
       void handle.getFile().then((file) => openFilesRef.current([file]));
     });
+  }, []);
+
+  useEffect(() => {
+    const android = window.CoroaPDFAndroid;
+    if (!android) return;
+    const encoded = android.consumeIncomingPdfBase64();
+    if (!encoded) return;
+    try {
+      const binary = window.atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const name = android.getIncomingPdfName() || "dokument.pdf";
+      void openFilesRef.current([new File([bytes], name, { type: "application/pdf" })]);
+      android.clearIncomingPdf();
+    } catch {
+      setViewerError(new Error("Die von Android übergebene PDF konnte nicht geöffnet werden."));
+    }
   }, []);
 
   useEffect(() => {
@@ -135,13 +159,7 @@ export default function PdfReaderPage() {
 
   const download = useCallback(() => {
     if (!loaded.file) return;
-    const blob = new Blob([new Uint8Array(loaded.file.bytes)], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const link = window.document.createElement("a");
-    link.href = url;
-    link.download = loaded.file.name;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadBytes(loaded.file.bytes, loaded.file.name);
   }, [loaded.file]);
 
   const openForm = async () => {
