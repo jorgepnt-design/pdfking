@@ -15,14 +15,6 @@ export function SiteFooter() {
           >
             Datenschutz
           </Link>
-          <a
-            href="https://github.com/jorgepnt-design/pdfking"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-slate-900 hover:underline dark:hover:text-white"
-          >
-            Quellcode (MIT)
-          </a>
         </nav>
       </div>
     </footer>

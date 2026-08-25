@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { ShieldCheck } from "lucide-react";
-import { InfoAlert } from "@/components/ui/alerts";
 
 export const metadata: Metadata = {
   title: "Datenschutz",
@@ -106,11 +105,6 @@ export default function DatenschutzPage() {
             <li>Die App funktioniert auch offline (nach dem ersten Laden) für lokale Werkzeuge.</li>
           </ul>
         </section>
-
-        <InfoAlert title="Offenheit statt Vertrauensvorschuss">
-          Der komplette Quellcode steht unter MIT-Lizenz auf GitHub bereit. Sicherheitsfragen? Siehe
-          SECURITY.md im Repository.
-        </InfoAlert>
       </div>
     </div>
   );

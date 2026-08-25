@@ -9,11 +9,6 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS = [
   { href: "/", label: "Werkzeuge" },
   { href: "/datenschutz", label: "Datenschutz" },
-  {
-    href: "https://github.com/jorgepnt-design/pdfking",
-    label: "GitHub",
-    external: true,
-  },
 ];
 
 export function SiteHeader() {
@@ -37,27 +32,15 @@ export function SiteHeader() {
         </Link>
 
         <nav aria-label="Hauptnavigation" className="hidden items-center gap-1 sm:flex">
-          {NAV_LINKS.map((link) =>
-            "external" in link && link.external ? (
-              <a
-                key={link.href}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-              >
-                {link.label}
-              </a>
-            ) : (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-              >
-                {link.label}
-              </Link>
-            ),
-          )}
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+            >
+              {link.label}
+            </Link>
+          ))}
           <button
             type="button"
             onClick={toggle}
@@ -96,18 +79,7 @@ export function SiteHeader() {
       >
         <ul className="flex flex-col gap-1">
           {[...NAV_LINKS, { href: "#theme", label: "__theme__" }].map((link) =>
-            link.label === "__theme__" ? null : "external" in link && link.external ? (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg px-3 py-2 text-sm"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ) : (
+            link.label === "__theme__" ? null : (
               <li key={link.href}>
                 <Link
                   href={link.href}
