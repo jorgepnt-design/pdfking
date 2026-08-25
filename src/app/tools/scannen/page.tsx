@@ -92,7 +92,11 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-async function prepareImage(page: ScanPage): Promise<PreparedScanPage> {
+async function renderProcessedPage(
+  page: ScanPage,
+  canvas: HTMLCanvasElement,
+  maxEdge: number,
+): Promise<{ width: number; height: number }> {
   const image = await loadImage(page.file);
   const swapped = page.rotation === 90 || page.rotation === 270;
   const sourceWidth = image.naturalWidth;
@@ -109,11 +113,9 @@ async function prepareImage(page: ScanPage): Promise<PreparedScanPage> {
   );
   const outputWidth = swapped ? cropHeight : cropWidth;
   const outputHeight = swapped ? cropWidth : cropHeight;
-  const maxEdge = 2480;
   const resizeScale = Math.min(1, maxEdge / Math.max(outputWidth, outputHeight));
   const width = Math.max(1, Math.round(outputWidth * resizeScale));
   const height = Math.max(1, Math.round(outputHeight * resizeScale));
-  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
@@ -138,6 +140,13 @@ async function prepareImage(page: ScanPage): Promise<PreparedScanPage> {
     drawnHeight,
   );
 
+  return { width, height };
+}
+
+async function prepareImage(page: ScanPage): Promise<PreparedScanPage> {
+  const canvas = document.createElement("canvas");
+  const { width, height } = await renderProcessedPage(page, canvas, 2480);
+
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(
       (value) => (value ? resolve(value) : reject(new Error("JPEG konnte nicht erstellt werden."))),
@@ -146,6 +155,42 @@ async function prepareImage(page: ScanPage): Promise<PreparedScanPage> {
     ),
   );
   return { bytes: new Uint8Array(await blob.arrayBuffer()), width, height };
+}
+
+function ScanPagePreview({ page, pageNumber }: { page: ScanPage; pageNumber: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let cancelled = false;
+    const preview = document.createElement("canvas");
+    void renderProcessedPage(page, preview, 900)
+      .then(() => {
+        if (cancelled) return;
+        canvas.width = preview.width;
+        canvas.height = preview.height;
+        canvas.getContext("2d")?.drawImage(preview, 0, 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const context = canvas.getContext("2d");
+          context?.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={`Bearbeitete Vorschau Seite ${pageNumber}`}
+      className="max-h-full max-w-full object-contain"
+    />
+  );
 }
 
 export default function ScannenPage() {
@@ -357,19 +402,17 @@ export default function ScannenPage() {
                 className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
               >
                 <div className="flex aspect-[3/4] items-center justify-center overflow-hidden bg-slate-100 p-3 dark:bg-slate-950">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={page.previewUrl}
-                    alt={`Vorschau Seite ${index + 1}`}
-                    className="max-h-full max-w-full object-contain transition-transform"
-                    style={{
-                      transform: `rotate(${page.rotation}deg)`,
-                      filter: imageFilter(page.adjustments),
-                    }}
-                  />
+                  <ScanPagePreview page={page} pageNumber={index + 1} />
                 </div>
                 <div className="flex items-center justify-between gap-2 p-3">
-                  <span className="truncate text-sm font-semibold">Seite {index + 1}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold">
+                    Seite {index + 1}
+                    {Object.values(page.crop).some((value) => value > 0) ? (
+                      <span className="ml-1 text-xs font-normal text-blue-700 dark:text-blue-400">
+                        · zugeschnitten
+                      </span>
+                    ) : null}
+                  </span>
                   <div className="flex items-center">
                     <IconButton
                       label="Seite nach vorne verschieben"
