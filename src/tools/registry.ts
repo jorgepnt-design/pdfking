@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Combine,
   EyeOff,
   FileOutput,
@@ -48,6 +49,16 @@ export const CATEGORY_ORDER: ToolCategory[] = [
 ];
 
 export const TOOLS: ToolDefinition[] = [
+  {
+    id: "reader",
+    title: "PDF Reader",
+    description:
+      "PDFs bequem lesen – mit Seitenwechsel, Zoom, Drehung und Vollbildansicht.",
+    category: "bearbeiten",
+    href: "/tools/lesen",
+    icon: BookOpen,
+    privacy: "local",
+  },
   {
     id: "scan",
     title: "Dokument scannen",

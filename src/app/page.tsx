@@ -14,8 +14,8 @@ export default function HomePage() {
           <span className="text-blue-700 dark:text-blue-400">Lokal im Browser.</span>
         </h1>
         <p className="mx-auto mt-3 max-w-2xl text-slate-600 dark:text-slate-400">
-          Bearbeiten, organisieren, komprimieren, unterschreiben und konvertieren – ohne dass deine
-          Dokumente dein Gerät verlassen. Kostenlos, offen und ohne Anmeldung.
+          Lesen, bearbeiten, organisieren, komprimieren, unterschreiben und konvertieren – ohne
+          dass deine Dokumente dein Gerät verlassen. Kostenlos, offen und ohne Anmeldung.
         </p>
       </section>
 

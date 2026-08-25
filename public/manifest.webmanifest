@@ -1,7 +1,7 @@
 {
   "name": "CoroaPDF – PDF-Werkzeuge",
   "short_name": "CoroaPDF",
-  "description": "PDFs bearbeiten, organisieren, komprimieren, unterschreiben und konvertieren – lokal im Browser.",
+  "description": "PDFs lesen, bearbeiten, organisieren, komprimieren, unterschreiben und konvertieren – lokal im Browser.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -19,6 +19,14 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/tools/lesen?quelle=datei",
+      "accept": {
+        "application/pdf": [".pdf"]
+      }
     }
   ]
 }
