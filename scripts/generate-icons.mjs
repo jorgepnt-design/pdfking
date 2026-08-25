@@ -93,17 +93,20 @@ const CX = 0.49 * S;
 const CY = 0.62 * S;
 const OUTER_R = 0.25 * S;
 const INNER_R = 0.14 * S;
-const CROWN_STROKE = 0.027 * S;
+const MID_R = (OUTER_R + INNER_R) / 2;
+const C_STROKE_RADIUS = (OUTER_R - INNER_R) / 2;
+const C_OPEN_ANGLE = 0.7;
+const CROWN_STROKE = 0.022 * S;
 const CROWN_PATH = [
-  [0.29 * S, 0.325 * S],
-  [0.29 * S, 0.215 * S],
-  [0.405 * S, 0.295 * S],
-  [0.50 * S, 0.135 * S],
-  [0.595 * S, 0.295 * S],
-  [0.71 * S, 0.215 * S],
-  [0.71 * S, 0.325 * S],
-  [0.29 * S, 0.325 * S],
+  [0.33 * S, 0.29 * S],
+  [0.33 * S, 0.20 * S],
+  [0.43 * S, 0.26 * S],
+  [0.50 * S, 0.145 * S],
+  [0.57 * S, 0.26 * S],
+  [0.67 * S, 0.20 * S],
+  [0.67 * S, 0.29 * S],
 ];
+const CROWN_BASE = [[0.37 * S, 0.325 * S], [0.63 * S, 0.325 * S]];
 
 /* ---------------- Master-Rendering (2048², Kanten später geglättet) ---------------- */
 
@@ -121,10 +124,15 @@ for (let y = 0; y < S; y++) {
     }
 
     // 2) Weißes C mit einer klaren Öffnung rechts
+    const angle = Math.atan2(y - CY, x - CX);
     const radius = Math.hypot(x - CX, y - CY);
-    const inRing = radius <= OUTER_R && radius >= INNER_R;
-    const inOpening = x > CX + 0.11 * S && Math.abs(y - CY) < 0.145 * S;
-    if (inRing && !inOpening) col = WHITE;
+    const upperCap = [CX + MID_R * Math.cos(-C_OPEN_ANGLE), CY + MID_R * Math.sin(-C_OPEN_ANGLE)];
+    const lowerCap = [CX + MID_R * Math.cos(C_OPEN_ANGLE), CY + MID_R * Math.sin(C_OPEN_ANGLE)];
+    const onArc = Math.abs(radius - MID_R) < C_STROKE_RADIUS && Math.abs(angle) >= C_OPEN_ANGLE;
+    const onCap =
+      Math.hypot(x - upperCap[0], y - upperCap[1]) < C_STROKE_RADIUS ||
+      Math.hypot(x - lowerCap[0], y - lowerCap[1]) < C_STROKE_RADIUS;
+    if (onArc || onCap) col = WHITE;
 
     // 3) Feine, symmetrische Kronenkontur oberhalb des C
     for (let point = 1; point < CROWN_PATH.length; point++) {
@@ -135,9 +143,21 @@ for (let y = 0; y < S; y++) {
         break;
       }
     }
+    if (
+      distanceToSegment(
+        x,
+        y,
+        CROWN_BASE[0][0],
+        CROWN_BASE[0][1],
+        CROWN_BASE[1][0],
+        CROWN_BASE[1][1],
+      ) < CROWN_STROKE
+    ) {
+      col = WHITE;
+    }
 
     // 4) Kleiner roter Edelstein in der Krone statt eines angesetzten Strichs
-    if (Math.abs(x - 0.5 * S) + Math.abs(y - 0.275 * S) < 0.031 * S) {
+    if (Math.abs(x - 0.5 * S) + Math.abs(y - 0.255 * S) < 0.025 * S) {
       col = RED;
     }
 
