@@ -72,20 +72,6 @@ function mix(a, b, t) {
   ];
 }
 
-/** Punkt im Dreieck? (Baryzentrisch) */
-function inTriangle(px, py, a, b, c) {
-  const s1 = cross(a, b, px, py);
-  const s2 = cross(b, c, px, py);
-  const s3 = cross(c, a, px, py);
-  const hasNeg = s1 < 0 || s2 < 0 || s3 < 0;
-  const hasPos = s1 > 0 || s2 > 0 || s3 > 0;
-  return !(hasNeg && hasPos);
-}
-
-function cross(p, q, x, y) {
-  return (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
-}
-
 function distanceToSegment(px, py, ax, ay, bx, by) {
   const dx = bx - ax;
   const dy = by - ay;
@@ -104,14 +90,19 @@ const RED = hex("#e52535");
 const S = MASTER;
 
 const CX = 0.49 * S;
-const CY = 0.56 * S;
-const OUTER_R = 0.285 * S;
-const INNER_R = 0.165 * S;
-const CROWN_BASE_Y = 0.36 * S;
-const CROWN_POINTS = [
-  [[0.25 * S, CROWN_BASE_Y], [0.25 * S, 0.255 * S], [0.39 * S, CROWN_BASE_Y]],
-  [[0.36 * S, CROWN_BASE_Y], [0.49 * S, 0.15 * S], [0.62 * S, CROWN_BASE_Y]],
-  [[0.59 * S, CROWN_BASE_Y], [0.73 * S, 0.255 * S], [0.73 * S, CROWN_BASE_Y]],
+const CY = 0.62 * S;
+const OUTER_R = 0.25 * S;
+const INNER_R = 0.14 * S;
+const CROWN_STROKE = 0.027 * S;
+const CROWN_PATH = [
+  [0.29 * S, 0.325 * S],
+  [0.29 * S, 0.215 * S],
+  [0.405 * S, 0.295 * S],
+  [0.50 * S, 0.135 * S],
+  [0.595 * S, 0.295 * S],
+  [0.71 * S, 0.215 * S],
+  [0.71 * S, 0.325 * S],
+  [0.29 * S, 0.325 * S],
 ];
 
 /* ---------------- Master-Rendering (2048², Kanten später geglättet) ---------------- */
@@ -135,16 +126,18 @@ for (let y = 0; y < S; y++) {
     const inOpening = x > CX + 0.11 * S && Math.abs(y - CY) < 0.145 * S;
     if (inRing && !inOpening) col = WHITE;
 
-    // 3) Drei Kronenspitzen wachsen aus dem oberen C-Bogen
-    if (y >= CROWN_BASE_Y - 0.035 * S && y <= CROWN_BASE_Y + 0.025 * S && x > 0.245 * S && x < 0.735 * S) {
-      col = WHITE;
-    }
-    for (const triangle of CROWN_POINTS) {
-      if (inTriangle(x, y, triangle[0], triangle[1], triangle[2])) col = WHITE;
+    // 3) Feine, symmetrische Kronenkontur oberhalb des C
+    for (let point = 1; point < CROWN_PATH.length; point++) {
+      const from = CROWN_PATH[point - 1];
+      const to = CROWN_PATH[point];
+      if (distanceToSegment(x, y, from[0], from[1], to[0], to[1]) < CROWN_STROKE) {
+        col = WHITE;
+        break;
+      }
     }
 
-    // 4) Roter Akzent verlängert den unteren Endpunkt des C
-    if (distanceToSegment(x, y, 0.66 * S, 0.745 * S, 0.79 * S, 0.675 * S) < 0.035 * S) {
+    // 4) Kleiner roter Edelstein in der Krone statt eines angesetzten Strichs
+    if (Math.abs(x - 0.5 * S) + Math.abs(y - 0.275 * S) < 0.031 * S) {
       col = RED;
     }
 

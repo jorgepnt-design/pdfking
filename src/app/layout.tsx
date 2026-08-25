@@ -14,8 +14,8 @@ export const metadata: Metadata = {
     "CoroaPDF: PDFs bearbeiten, organisieren, verkleinern, unterschreiben und konvertieren – standardmäßig vollständig lokal im Browser.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/icons/icon-32.png?v=4", sizes: "32x32", type: "image/png" }],
-    apple: [{ url: "/icons/apple-touch-icon.png?v=4", sizes: "180x180", type: "image/png" }],
+    icon: [{ url: "/icons/icon-32.png?v=5", sizes: "32x32", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png?v=5", sizes: "180x180", type: "image/png" }],
   },
 };
 
