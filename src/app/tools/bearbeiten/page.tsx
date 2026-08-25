@@ -252,7 +252,7 @@ function EditorInner() {
     };
   }, [jsDoc, pageIndex, pageRotations]);
 
-  // Signatur-Vorwahl per URL (?tool=signatur) – Effect folgt unterhalb der Definition.
+  // Werkzeug-Vorwahl per URL – Effect folgt unterhalb der Definition.
   const openSignaturePicker = async () => {
     if (!isSessionUnlocked()) {
       setSignaturesUnlocked(false);
@@ -285,6 +285,8 @@ function EditorInner() {
       const params = new URLSearchParams(window.location.search);
       if (params.get("tool") === "signatur") {
         void openSignaturePicker();
+      } else if (params.get("tool") === "text") {
+        setTool("text");
       }
     }, 0);
     return () => window.clearTimeout(timer);

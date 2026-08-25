@@ -5,17 +5,23 @@ import {
   ChevronRight,
   Download,
   Expand,
+  FormInput,
   RotateCw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { FileDropzone } from "@/components/shared/file-dropzone";
 import { ToolShell } from "@/components/shared/tool-shell";
-import { ErrorAlert, InfoAlert } from "@/components/ui/alerts";
+import { ErrorAlert, InfoAlert, SuccessAlert } from "@/components/ui/alerts";
 import { Button } from "@/components/ui/button";
+import { Checkbox, FieldLabel, Input, Select } from "@/components/ui/form";
 import { useLoadedPdf } from "@/hooks/useLoadedPdf";
+import { saveEditorDraft } from "@/lib/editor/draft";
+import type { FormFieldInfo, FormValues } from "@/lib/pdf/forms";
+import { detectFormFields, fillForm } from "@/lib/pdf/forms";
 import { loadPdfJsDocument, renderPageToCanvas } from "@/lib/pdf/pdfjs";
 
 interface LaunchFileHandle {
@@ -31,6 +37,7 @@ declare global {
 }
 
 export default function PdfReaderPage() {
+  const router = useRouter();
   const loaded = useLoadedPdf();
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(0);
@@ -39,6 +46,11 @@ export default function PdfReaderPage() {
   const [viewerWidth, setViewerWidth] = useState(760);
   const [rendering, setRendering] = useState(false);
   const [viewerError, setViewerError] = useState<Error | null>(null);
+  const [formFields, setFormFields] = useState<FormFieldInfo[]>([]);
+  const [formValues, setFormValues] = useState<FormValues>({});
+  const [formMode, setFormMode] = useState(false);
+  const [formBusy, setFormBusy] = useState(false);
+  const [formSaved, setFormSaved] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const openFilesRef = useRef(loaded.openFiles);
@@ -132,11 +144,80 @@ export default function PdfReaderPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [loaded.file]);
 
+  const openForm = async () => {
+    if (!loaded.file || formBusy) return;
+    setFormBusy(true);
+    setViewerError(null);
+    setFormSaved(false);
+    try {
+      const detected = await detectFormFields(loaded.file.bytes);
+      const supportedTypes = new Set(["text", "checkbox", "dropdown", "optionlist", "radio"]);
+      const fields = detected.fields.filter((field) => supportedTypes.has(field.type));
+      if (fields.length === 0) {
+        await saveEditorDraft({
+          pdfBytes: loaded.file.bytes,
+          pdfName: loaded.file.name,
+          pdfSize: loaded.file.size,
+          pageIndex: page,
+          pages: {},
+          updatedAt: Date.now(),
+        });
+        sessionStorage.setItem("pdfking.editor.resume", "1");
+        router.push("/tools/bearbeiten?resume=1&tool=text&quelle=reader");
+        return;
+      }
+
+      const initial: FormValues = {};
+      for (const field of fields) {
+        if (field.type === "checkbox") initial[field.name] = field.value === true;
+        else if (field.value !== null && typeof field.value !== "boolean") {
+          initial[field.name] = String(field.value);
+        }
+      }
+      setFormFields(fields);
+      setFormValues(initial);
+      setFormMode(true);
+    } catch (error) {
+      setViewerError(
+        error instanceof Error ? error : new Error("Formular konnte nicht geöffnet werden."),
+      );
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  const saveForm = async () => {
+    if (!loaded.file || formBusy) return;
+    setFormBusy(true);
+    setViewerError(null);
+    try {
+      const bytes = await fillForm(loaded.file.bytes, formValues, false);
+      const name = `${loaded.file.name.replace(/\.pdf$/i, "")}-ausgefuellt.pdf`;
+      loaded.setFile({ name, size: bytes.byteLength, bytes });
+      setFormMode(false);
+      setFormSaved(true);
+    } catch (error) {
+      setViewerError(
+        error instanceof Error ? error : new Error("Formular konnte nicht gespeichert werden."),
+      );
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  const updateFormValue = (name: string, value: string | boolean) => {
+    setFormValues((current) => ({ ...current, [name]: value }));
+  };
+
   const reset = () => {
     loaded.setFile(null);
     loaded.setLoadError(null);
     setDocument(null);
     setViewerError(null);
+    setFormMode(false);
+    setFormFields([]);
+    setFormValues({});
+    setFormSaved(false);
   };
 
   return (
@@ -182,6 +263,10 @@ export default function PdfReaderPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" onClick={openForm} disabled={formBusy}>
+                <FormInput aria-hidden className="h-4 w-4" />
+                {formBusy ? "Felder werden gesucht …" : "Formular ausfüllen"}
+              </Button>
               <Button variant="secondary" onClick={reset}>
                 Andere PDF
               </Button>
@@ -190,6 +275,89 @@ export default function PdfReaderPage() {
               </Button>
             </div>
           </div>
+
+          {formSaved ? (
+            <SuccessAlert title="Formular gespeichert">
+              Die ausgefüllte PDF wird jetzt im Reader angezeigt und kann heruntergeladen werden.
+            </SuccessAlert>
+          ) : null}
+
+          {formMode ? (
+            <section className="space-y-4 rounded-xl border border-green-200 bg-green-50/60 p-5 dark:border-green-900 dark:bg-green-950/20">
+              <div>
+                <h2 className="font-semibold text-slate-900 dark:text-white">
+                  Formular ausfüllen
+                </h2>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  {formFields.length} ausfüllbare{formFields.length === 1 ? "s Feld" : " Felder"}
+                  erkannt.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {formFields.map((field, index) => {
+                  const value = formValues[field.name];
+                  const id = `reader-form-${index}`;
+                  if (field.type === "text") {
+                    return (
+                      <div key={field.name}>
+                        <FieldLabel htmlFor={id}>{field.name}</FieldLabel>
+                        <Input
+                          id={id}
+                          value={(value as string) ?? ""}
+                          disabled={field.readOnly}
+                          onChange={(event) => updateFormValue(field.name, event.target.value)}
+                        />
+                      </div>
+                    );
+                  }
+                  if (field.type === "checkbox") {
+                    return (
+                      <Checkbox
+                        key={field.name}
+                        label={field.name}
+                        checked={value === true}
+                        disabled={field.readOnly}
+                        onChange={(event) => updateFormValue(field.name, event.target.checked)}
+                      />
+                    );
+                  }
+                  if (
+                    field.type === "dropdown" ||
+                    field.type === "optionlist" ||
+                    field.type === "radio"
+                  ) {
+                    return (
+                      <div key={field.name}>
+                        <FieldLabel htmlFor={id}>{field.name}</FieldLabel>
+                        <Select
+                          id={id}
+                          value={(value as string) ?? ""}
+                          disabled={field.readOnly}
+                          onChange={(event) => updateFormValue(field.name, event.target.value)}
+                        >
+                          <option value="">– nichts gewählt –</option>
+                          {(field.options ?? []).map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={saveForm} disabled={formBusy}>
+                  {formBusy ? "Wird gespeichert …" : "Ausgefüllte PDF übernehmen"}
+                </Button>
+                <Button variant="ghost" onClick={() => setFormMode(false)} disabled={formBusy}>
+                  Abbrechen
+                </Button>
+              </div>
+            </section>
+          ) : null}
 
           <div className="sticky top-2 z-10 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
             <Button
