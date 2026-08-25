@@ -1,8 +1,8 @@
 {
-  "name": "pdfking",
+  "name": "coroapdf",
   "version": "0.1.0",
   "private": false,
-  "description": "PDFKing – sichere PDF-Werkzeuge. Lokale Verarbeitung direkt im Browser.",
+  "description": "CoroaPDF – sichere PDF-Werkzeuge. Lokale Verarbeitung direkt im Browser.",
   "license": "MIT",
   "repository": {
     "type": "git",

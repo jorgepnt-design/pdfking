@@ -25,7 +25,7 @@ export function SiteHeader() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-700 text-white">
             <Crown aria-hidden className="h-4.5 w-4.5" />
           </span>
-          PDFKing
+          CoroaPDF
           <span className="text-[11px] font-medium font-normal tracking-wide text-slate-400 dark:text-slate-500">
             by Jorge
           </span>

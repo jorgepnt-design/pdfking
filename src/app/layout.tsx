@@ -7,11 +7,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "PDFKing – PDF-Werkzeuge, lokal im Browser",
-    template: "%s | PDFKing",
+    default: "CoroaPDF – PDF-Werkzeuge, lokal im Browser",
+    template: "%s | CoroaPDF",
   },
   description:
-    "PDFKing: PDFs bearbeiten, organisieren, verkleinern, unterschreiben und konvertieren – standardmäßig vollständig lokal im Browser.",
+    "CoroaPDF: PDFs bearbeiten, organisieren, verkleinern, unterschreiben und konvertieren – standardmäßig vollständig lokal im Browser.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icons/icon-32.png", sizes: "32x32", type: "image/png" }],

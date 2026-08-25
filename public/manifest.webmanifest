@@ -1,6 +1,6 @@
 {
-  "name": "PDFKing – PDF-Werkzeuge",
-  "short_name": "PDFKing",
+  "name": "CoroaPDF – PDF-Werkzeuge",
+  "short_name": "CoroaPDF",
   "description": "PDFs bearbeiten, organisieren, komprimieren, unterschreiben und konvertieren – lokal im Browser.",
   "start_url": "/",
   "display": "standalone",

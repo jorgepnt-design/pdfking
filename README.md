@@ -1,8 +1,8 @@
-# PDFKing 👑
+# CoroaPDF 👑
 
 **Sichere PDF-Werkzeuge – standardmäßig vollständig lokal im Browser.**
 
-PDFKing ist eine Open-Source-Web-App zum Bearbeiten, Organisieren, Verkleinern, Unterschreiben und Konvertieren von PDFs. Vertrauliche Dokumente verlassen dein Gerät nicht: Die Verarbeitung läuft direkt im Browser (JavaScript/WebAssembly), ohne Upload, ohne Konto, ohne Tracking.
+CoroaPDF ist eine Open-Source-Web-App zum Bearbeiten, Organisieren, Verkleinern, Unterschreiben und Konvertieren von PDFs. Vertrauliche Dokumente verlassen dein Gerät nicht: Die Verarbeitung läuft direkt im Browser (JavaScript/WebAssembly), ohne Upload, ohne Konto, ohne Tracking.
 
 > **Hinweis:** Das Einfügen einer sichtbaren Unterschrift ist **keine qualifizierte elektronische Signatur (QES)** und ersetzt keine kryptografische Dokumentsignatur.
 
@@ -239,4 +239,4 @@ Bitte **nicht** als öffentliches Issue melden → [SECURITY.md](SECURITY.md).
 
 ## 📄 Lizenz
 
-[MIT](LICENSE) © PDFKing Contributors
+[MIT](LICENSE) © CoroaPDF Contributors

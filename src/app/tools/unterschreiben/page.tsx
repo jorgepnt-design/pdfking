@@ -243,7 +243,7 @@ export default function UnterschreibenPage() {
       ) : null}
 
       <WarningAlert title="Rechtlicher Hinweis">
-        PDFKing fügt eine <strong>sichtbare</strong> Unterschrift in das Dokument ein. Das ist keine
+        CoroaPDF fügt eine <strong>sichtbare</strong> Unterschrift in das Dokument ein. Das ist keine
         qualifizierte elektronische Signatur (QES) im Sinne der eIDAS-Verordnung und ersetzt keine
         kryptografische Signatur.
       </WarningAlert>

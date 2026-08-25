@@ -1,6 +1,6 @@
 # Optionaler Konvertierungs-Backend (Referenz)
 
-PDFKing läuft ohne dieses Backend – es ist ausschließlich für Funktionen gedacht, die im Browser technisch nicht zuverlässig möglich sind:
+CoroaPDF läuft ohne dieses Backend – es ist ausschließlich für Funktionen gedacht, die im Browser technisch nicht zuverlässig möglich sind:
 
 | Format        | Zweck                         | Empfohlenes Werkzeug (serverseitig)               |
 | ------------- | ----------------------------- | ------------------------------------------------- |

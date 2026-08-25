@@ -120,7 +120,7 @@ export async function pdfToHtmlFile(bytes: Uint8Array, sourceName: string): Prom
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(sourceName)} – konvertiert mit PDFKing</title>
+    <title>${escapeHtml(sourceName)} – konvertiert mit CoroaPDF</title>
     <style>
       body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1e293b; }
       .seite { border-bottom: 1px solid #e2e8f0; padding-bottom: 2rem; margin-bottom: 2rem; }
@@ -130,7 +130,7 @@ export async function pdfToHtmlFile(bytes: Uint8Array, sourceName: string): Prom
   <body>
     <h1>${escapeHtml(sourceName)}</h1>
 ${body}
-    <footer><small>Konvertiert mit PDFKing – Textstruktur vereinfacht wiedergegeben.</small></footer>
+    <footer><small>Konvertiert mit CoroaPDF – Textstruktur vereinfacht wiedergegeben.</small></footer>
   </body>
 </html>`;
   return new Blob([html], { type: "text/html;charset=utf-8" });

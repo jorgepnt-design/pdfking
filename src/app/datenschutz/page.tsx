@@ -4,7 +4,7 @@ import { ShieldCheck } from "lucide-react";
 export const metadata: Metadata = {
   title: "Datenschutz",
   description:
-    "Wie PDFKing mit deinen Dokumenten umgeht: lokale Verarbeitung, keine Protokollierung, klare Kennzeichnung von Serverfunktionen.",
+    "Wie CoroaPDF mit deinen Dokumenten umgeht: lokale Verarbeitung, keine Protokollierung, klare Kennzeichnung von Serverfunktionen.",
 };
 
 export default function DatenschutzPage() {
@@ -15,12 +15,12 @@ export default function DatenschutzPage() {
           <ShieldCheck aria-hidden className="h-6 w-6" />
         </span>
         <h1 className="text-3xl font-bold tracking-tight dark:text-white">
-          Datenschutz bei PDFKing
+          Datenschutz bei CoroaPDF
         </h1>
       </div>
 
       <p className="mb-8 text-slate-600 dark:text-slate-400">
-        PDFKing wurde von Grund auf so gebaut, dass vertrauliche Dokumente dein Gerät möglichst nie
+        CoroaPDF wurde von Grund auf so gebaut, dass vertrauliche Dokumente dein Gerät möglichst nie
         verlassen. Diese Seite erklärt transparent, was technisch passiert – ohne Kleingedrucktes.
       </p>
 
@@ -81,7 +81,7 @@ export default function DatenschutzPage() {
         <section>
           <h2>4. Kein Tracking, keine Analyse</h2>
           <p>
-            PDFKing enthält keine Werbe-, Analyse- oder Trackingdienste. Es werden keine Cookies
+            CoroaPDF enthält keine Werbe-, Analyse- oder Trackingdienste. Es werden keine Cookies
             gesetzt und keine Nutzungsprofile erstellt. Serveranfragen gehen ausschließlich an deine
             eigene Instanz (statische App-Dateien).
           </p>

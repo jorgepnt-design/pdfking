@@ -1,5 +1,5 @@
 /**
- * PDFKing App-Icon-Generator
+ * CoroaPDF App-Icon-Generator
  * Zeichnet das Logo prozedural (Blauverlauf + Dokument mit Falte + goldene Krone)
  * und exportiert alle benötigten Größen als PNG – ohne externe Abhängigkeiten.
  */

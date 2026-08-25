@@ -1,4 +1,4 @@
-# Mitwirken an PDFKing
+# Mitwirken an CoroaPDF
 
 Danke für dein Interesse! Dieses Projekt lebt von Beiträgen. Diese Datei erklärt dir, wie du effizient beitragen kannst.
 
@@ -39,7 +39,7 @@ Der CI-Workflow führt alle vier Schritte automatisch aus – PRs müssen grün 
 
 ## Neues Werkzeug hinzufügen
 
-PDFKing ist modular aufgebaut. So ergänzt du ein eigenes PDF-Werkzeug:
+CoroaPDF ist modular aufgebaut. So ergänzt du ein eigenes PDF-Werkzeug:
 
 1. **Logik** (`src/lib/pdf/`): Implementiere die reine Verarbeitungsfunktion mit `@cantoo/pdf-lib` oder PDF.js. Nutze das Muster `(bytes: Uint8Array, options) => Promise<Uint8Array>`. Kein UI-Code hier!
 2. **Registrierung** (`src/tools/registry.ts`): Füge eine `ToolDefinition` hinzu (Titel, Beschreibung, Kategorie, Route, Icon, Datenschutz-Einstufung).

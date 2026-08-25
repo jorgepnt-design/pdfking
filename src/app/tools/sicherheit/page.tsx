@@ -278,7 +278,7 @@ function EncryptTab() {
       ) : null}
 
       <WarningAlert title="Passwort unbedingt merken">
-        Ohne das richtige Passwort ist der Inhalt nicht wiederherstellbar – auch PDFKing kann
+        Ohne das richtige Passwort ist der Inhalt nicht wiederherstellbar – auch CoroaPDF kann
         verschlüsselte Dateien nicht ohne Passwort öffnen.
       </WarningAlert>
 
