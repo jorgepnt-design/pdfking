@@ -1,6 +1,7 @@
 "use client";
 
 import type { StoredSignature, StoredSignatureMeta } from "../types";
+import { fromBase64, toBase64 } from "./encoding";
 
 const DB_NAME = "pdfking";
 const STORE_NAME = "signatures";
@@ -123,4 +124,74 @@ export async function saveSignatureSalt(value: string): Promise<void> {
     (store) =>
       store.put({ key: "signatureSalt", value } satisfies SettingRecord) as IDBRequest<IDBValidKey>,
   );
+}
+
+export interface SignatureBackup {
+  version: 1;
+  salt: string;
+  signatures: Array<{
+    id: string;
+    name: string;
+    source: StoredSignature["source"];
+    createdAt: number;
+    ivB64: string;
+    cipherB64: string;
+  }>;
+}
+
+/** Exportiert nur bereits verschlüsselte Datensätze – niemals die Passphrase oder Klartextbilder. */
+export async function exportSignatureBackup(): Promise<SignatureBackup> {
+  const salt = await getSignatureSalt();
+  const signatures = await withStore<StoredSignature[]>(
+    STORE_NAME,
+    "readonly",
+    (store) => store.getAll() as IDBRequest<StoredSignature[]>,
+  );
+  if (!salt || signatures.length === 0) {
+    throw new Error("Auf dieser Adresse wurden keine alten Unterschriften gefunden.");
+  }
+  return {
+    version: 1,
+    salt,
+    signatures: signatures.map((signature) => ({
+      id: signature.id,
+      name: signature.name,
+      source: signature.source,
+      createdAt: signature.createdAt,
+      ivB64: signature.payload.ivB64,
+      cipherB64: toBase64(new Uint8Array(signature.payload.cipher)),
+    })),
+  };
+}
+
+/** Importiert ein verschlüsseltes Backup nur in einen noch leeren Speicher. */
+export async function importSignatureBackup(backup: SignatureBackup): Promise<number> {
+  if (backup.version !== 1 || !backup.salt || !Array.isArray(backup.signatures)) {
+    throw new Error("Die übertragenen Unterschriftendaten sind ungültig.");
+  }
+  const existing = await listSignatures();
+  if (existing.length > 0) {
+    throw new Error(
+      "Auf dieser Adresse sind bereits Unterschriften gespeichert. Die Übernahme wurde zum Schutz dieser Daten abgebrochen.",
+    );
+  }
+  await saveSignatureSalt(backup.salt);
+  try {
+    localStorage.setItem("pdfking.signature.salt", backup.salt);
+  } catch {
+    // Die Salt-Kopie in IndexedDB reicht aus.
+  }
+  for (const signature of backup.signatures) {
+    await saveSignature({
+      id: signature.id,
+      name: signature.name,
+      source: signature.source,
+      createdAt: signature.createdAt,
+      payload: {
+        ivB64: signature.ivB64,
+        cipher: fromBase64(signature.cipherB64).buffer as ArrayBuffer,
+      },
+    });
+  }
+  return backup.signatures.length;
 }

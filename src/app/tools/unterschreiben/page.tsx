@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Eraser, LockKeyhole, LockOpen, PenTool, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  DownloadCloud,
+  Eraser,
+  LockKeyhole,
+  LockOpen,
+  PenTool,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { FileDropzone } from "@/components/shared/file-dropzone";
 import { ProcessingOverlay } from "@/components/shared/processing-overlay";
@@ -15,9 +23,12 @@ import type { StoredSignatureMeta, SignatureSource } from "@/lib/types";
 import {
   clearSignatures,
   deleteSignature,
+  exportSignatureBackup,
+  importSignatureBackup,
   listSignatures,
   loadSignaturePayload,
   saveSignature,
+  type SignatureBackup,
 } from "@/lib/signatures/store";
 import {
   arrayBufferToDataUrl,
@@ -42,6 +53,9 @@ export default function UnterschreibenPage() {
   const [signatures, setSignatures] = useState<StoredSignatureMeta[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [nameInput, setNameInput] = useState("");
+  const [localSignatureCount, setLocalSignatureCount] = useState<number | null>(null);
+  const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
+  const [isCoroaHost, setIsCoroaHost] = useState(false);
 
   // Zeichnen
   const padRef = useRef<HTMLCanvasElement>(null);
@@ -54,6 +68,7 @@ export default function UnterschreibenPage() {
     if (!isSessionUnlocked()) return;
     const metas = await listSignatures();
     setSignatures(metas);
+    setLocalSignatureCount(metas.length);
     const nextPreviews: Record<string, string> = {};
     for (const meta of metas) {
       try {
@@ -70,8 +85,83 @@ export default function UnterschreibenPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => setUnlocked(isSessionUnlocked()), 0);
+    setIsCoroaHost(window.location.hostname === "coroapdf.vercel.app");
+    void listSignatures()
+      .then((items) => setLocalSignatureCount(items.length))
+      .catch(() => setLocalSignatureCount(0));
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (
+      window.location.hostname !== "pdfking-beta.vercel.app" ||
+      params.get("migration") !== "source"
+    ) {
+      return;
+    }
+
+    void exportSignatureBackup()
+      .then((backup) => {
+        if (!window.opener) {
+          throw new Error("Das CoroaPDF-Fenster wurde nicht gefunden.");
+        }
+        window.opener.postMessage(
+          { type: "COROAPDF_SIGNATURE_MIGRATION", backup },
+          "https://coroapdf.vercel.app",
+        );
+        setMigrationMessage(
+          "Unterschriften wurden übertragen. Dieses Fenster kann geschlossen werden.",
+        );
+        window.setTimeout(() => window.close(), 900);
+      })
+      .catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : "Die Übernahme ist fehlgeschlagen.";
+        setMigrationMessage(message);
+        window.opener?.postMessage(
+          { type: "COROAPDF_SIGNATURE_MIGRATION_ERROR", message },
+          "https://coroapdf.vercel.app",
+        );
+      });
+  }, []);
+
+  useEffect(() => {
+    const receiveMigration = (event: MessageEvent) => {
+      if (event.origin !== "https://pdfking-beta.vercel.app") return;
+      if (event.data?.type === "COROAPDF_SIGNATURE_MIGRATION_ERROR") {
+        setMigrationMessage(String(event.data.message || "Die Übernahme ist fehlgeschlagen."));
+        return;
+      }
+      if (event.data?.type !== "COROAPDF_SIGNATURE_MIGRATION") return;
+      void processing.run("Alte Unterschriften werden übernommen …", async () => {
+        const count = await importSignatureBackup(event.data.backup as SignatureBackup);
+        lockSignatureStore();
+        setUnlocked(false);
+        setLocalSignatureCount(count);
+        setMigrationMessage(
+          `${count} Unterschrift${count === 1 ? " wurde" : "en wurden"} übernommen. Entsperre sie jetzt mit deiner bisherigen Passphrase.`,
+        );
+        return true;
+      });
+    };
+    window.addEventListener("message", receiveMigration);
+    return () => window.removeEventListener("message", receiveMigration);
+  }, [processing.run]);
+
+  const migrateOldSignatures = () => {
+    processing.clearError();
+    setMigrationMessage(null);
+    const popup = window.open(
+      "https://pdfking-beta.vercel.app/tools/unterschreiben?migration=source",
+      "coroapdf-signature-migration",
+    );
+    if (!popup) {
+      setMigrationMessage(
+        "Das Übernahmefenster wurde blockiert. Erlaube Pop-ups für CoroaPDF und versuche es erneut.",
+      );
+    }
+  };
 
   useEffect(() => {
     setReturnToEditor(new URLSearchParams(window.location.search).get("returnTo") === "editor");
@@ -247,6 +337,29 @@ export default function UnterschreibenPage() {
         qualifizierte elektronische Signatur (QES) im Sinne der eIDAS-Verordnung und ersetzt keine
         kryptografische Signatur.
       </WarningAlert>
+
+      {migrationMessage ? (
+        <div className="mt-5">
+          <InfoAlert title="Unterschriften-Übernahme">{migrationMessage}</InfoAlert>
+        </div>
+      ) : null}
+
+      {isCoroaHost && localSignatureCount === 0 ? (
+        <section className="mt-5 flex flex-col gap-3 rounded-xl border border-green-200 bg-green-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-green-900 dark:bg-green-950/30">
+          <div>
+            <h2 className="font-semibold text-green-950 dark:text-green-100">
+              Unterschriften von PDFKing übernehmen
+            </h2>
+            <p className="mt-1 text-sm text-green-900/80 dark:text-green-200/80">
+              Falls deine Unterschriften nach der Umbenennung fehlen, kannst du den verschlüsselten
+              Speicher der alten Adresse einmalig übernehmen.
+            </p>
+          </div>
+          <Button onClick={migrateOldSignatures} disabled={processing.state.active}>
+            <DownloadCloud aria-hidden className="h-4 w-4" /> Alte Unterschriften übernehmen
+          </Button>
+        </section>
+      ) : null}
 
       {!unlocked ? (
         <section className="mx-auto mt-8 max-w-md space-y-4 rounded-xl border border-slate-200 p-6 dark:border-slate-800">
