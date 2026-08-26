@@ -524,10 +524,10 @@ export default function KonvertierenPage() {
               />
             )}
             <InfoAlert title="Lokale und serverbasierte Umwandlung">
-              DOCX wird direkt auf deinem Gerät gerendert und als PDF gespeichert. Das sichtbare
-              Layout bleibt dabei erhalten; der Text im Ergebnis ist wie bei einem Scan nicht
-              einzeln auswählbar. PPTX und XLSX benötigen für eine zuverlässige Umwandlung weiterhin
-              einen eingerichteten Server mit LibreOffice.
+              DOCX wird direkt auf deinem Gerät mit echten Seitengrößen und automatischen
+              Seitenumbrüchen in PDF umgewandelt. Text bleibt im Ergebnis auswählbar, Tabellen und
+              Linien werden als Vektoren ausgegeben. PPTX und XLSX benötigen für eine zuverlässige
+              Umwandlung weiterhin einen eingerichteten Server mit LibreOffice.
             </InfoAlert>
           </div>
         </TabsContent>
