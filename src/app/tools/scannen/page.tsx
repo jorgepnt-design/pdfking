@@ -23,6 +23,11 @@ import { FieldLabel, Input } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
 import { useProcessing } from "@/hooks/useProcessing";
 import { saveEditorDraft } from "@/lib/editor/draft";
+import {
+  applyImageAdjustments,
+  hasImageAdjustments,
+  type ImageAdjustments,
+} from "@/lib/image-adjustments";
 import { createScanPdf, type PreparedScanPage } from "@/lib/pdf/scan";
 import { AppError } from "@/lib/types";
 import { validateImageFile } from "@/lib/validate";
@@ -46,13 +51,6 @@ interface CropValues {
 }
 
 const EMPTY_CROP: CropValues = { top: 0, right: 0, bottom: 0, left: 0 };
-
-interface ImageAdjustments {
-  brightness: number;
-  contrast: number;
-  saturation: number;
-  grayscale: number;
-}
 
 const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
   brightness: 100,
@@ -123,7 +121,6 @@ async function renderProcessedPage(
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
-  context.filter = imageFilter(page.adjustments);
   context.translate(width / 2, height / 2);
   context.rotate((page.rotation * Math.PI) / 180);
   const drawnWidth = cropWidth * resizeScale;
@@ -139,6 +136,12 @@ async function renderProcessedPage(
     drawnWidth,
     drawnHeight,
   );
+
+  if (hasImageAdjustments(page.adjustments)) {
+    const imageData = context.getImageData(0, 0, width, height);
+    applyImageAdjustments(imageData.data, page.adjustments);
+    context.putImageData(imageData, 0, 0);
+  }
 
   return { width, height };
 }
@@ -261,9 +264,7 @@ export default function ScannenPage() {
   const rotatePage = (id: string) => {
     updatePages(
       pages.map((page) =>
-        page.id === id
-          ? { ...page, rotation: ((page.rotation + 90) % 360) as Rotation }
-          : page,
+        page.id === id ? { ...page, rotation: ((page.rotation + 90) % 360) as Rotation } : page,
       ),
     );
   };
