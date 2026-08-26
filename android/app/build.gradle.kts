@@ -10,6 +10,7 @@ android {
         applicationId = "com.jorgepnt.coroapdf"
         minSdk = 29
         targetSdk = 36
+        // Google Play requires a higher versionCode for every native update.
         versionCode = 2
         versionName = "1.0.1"
     }
