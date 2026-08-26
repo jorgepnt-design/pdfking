@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { FieldLabel, RadioGroupField } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProcessing } from "@/hooks/useProcessing";
+import { docxToPdf } from "@/lib/office/docx-to-pdf";
 import type { ServerStatus } from "@/lib/types";
 import {
   imagesToPdf,
@@ -135,7 +136,7 @@ export default function KonvertierenPage() {
     }
   };
 
-  // ---- Office → PDF (Server) ----
+  // ---- Office → PDF ----
   const [officeFile, setOfficeFile] = useState<File | null>(null);
   const [serverMessage, setServerMessage] = useState<string | null>(null);
   const [serverResult, setServerResult] = useState<{
@@ -145,6 +146,7 @@ export default function KonvertierenPage() {
   } | null>(null);
 
   const serverEnabled = serverStatus?.enabled === true;
+  const officeIsDocx = officeFile?.name.toLowerCase().endsWith(".docx") === true;
 
   const runOfficeConversion = () =>
     processing.run("Datei wird an den Server übertragen …", async ({ report }) => {
@@ -179,6 +181,19 @@ export default function KonvertierenPage() {
     });
 
   const tryOfficeConversion = () => {
+    if (officeFile && officeIsDocx) {
+      setServerMessage(null);
+      void processing.run("Word-Dokument wird lokal in PDF umgewandelt …", async ({ report }) => {
+        const blob = await docxToPdf(officeFile, report);
+        setServerResult({
+          blob,
+          filename: `${sanitizeFilename(officeFile.name.replace(/\.docx$/i, ""))}.pdf`,
+          mime: "application/pdf",
+        });
+        return blob;
+      });
+      return;
+    }
     if (!serverEnabled) {
       setServerMessage(
         "Für diese Konvertierung ist ein Verarbeitungsserver erforderlich, der aktuell nicht eingerichtet ist.",
@@ -199,7 +214,7 @@ export default function KonvertierenPage() {
   return (
     <ToolShell
       title="PDF konvertieren"
-      description="Wandle PDFs in Bilder, Text oder HTML um und zurück. Grüne Funktionen laufen komplett lokal; amber markierte benötigen optional einen Server."
+      description="Wandle PDFs in Bilder, Text oder HTML um und zurück. Auch DOCX wird komplett lokal in PDF umgewandelt; amber markierte Funktionen benötigen optional einen Server."
       privacy="mixed"
     >
       {processing.error && (
@@ -421,8 +436,8 @@ export default function KonvertierenPage() {
                 </p>
                 <h3 className="font-semibold">Layout und Bilder beibehalten</h3>
                 <p className="grow text-sm text-slate-600 dark:text-slate-400">
-                  Übernimmt jede Seite einschließlich Layout, Bildern, Tabellen und Schriften in
-                  das Word-Dokument. Die Seiten sehen wie im PDF aus, sind aber nicht als einzelne
+                  Übernimmt jede Seite einschließlich Layout, Bildern, Tabellen und Schriften in das
+                  Word-Dokument. Die Seiten sehen wie im PDF aus, sind aber nicht als einzelne
                   Word-Elemente bearbeitbar.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
@@ -491,7 +506,13 @@ export default function KonvertierenPage() {
                   {officeFile.name} ({formatBytes(officeFile.size)})
                 </p>
                 <Button onClick={tryOfficeConversion}>Zu PDF konvertieren</Button>
-                {!serverEnabled ? serverBadge : null}
+                {officeIsDocx ? (
+                  <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-900/50 dark:text-green-100">
+                    Lokal · kein Upload
+                  </span>
+                ) : !serverEnabled ? (
+                  serverBadge
+                ) : null}
               </div>
             ) : null}
             {serverResult && (
@@ -502,10 +523,11 @@ export default function KonvertierenPage() {
                 mime={serverResult.mime}
               />
             )}
-            <InfoAlert title="Warum braucht das einen Server?">
-              DOCX/PPTX/XLSX enthalten komplexe Layouts, deren verlustfreie Umwandlung Programme wie
-              LibreOffice erfordert – diese laufen nicht im Browser. Ein eingerichteter Server
-              löscht hochgeladene Dateien sofort nach der Konvertierung.
+            <InfoAlert title="Lokale und serverbasierte Umwandlung">
+              DOCX wird direkt auf deinem Gerät gerendert und als PDF gespeichert. Das sichtbare
+              Layout bleibt dabei erhalten; der Text im Ergebnis ist wie bei einem Scan nicht
+              einzeln auswählbar. PPTX und XLSX benötigen für eine zuverlässige Umwandlung weiterhin
+              einen eingerichteten Server mit LibreOffice.
             </InfoAlert>
           </div>
         </TabsContent>
