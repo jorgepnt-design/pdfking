@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { FieldLabel, RadioGroupField } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProcessing } from "@/hooks/useProcessing";
-import { docxToPdf } from "@/lib/office/docx-to-pdf";
+import { officeToPdf } from "@/lib/office/office-to-pdf";
 import type { ServerStatus } from "@/lib/types";
 import {
   imagesToPdf,
@@ -138,7 +138,6 @@ export default function KonvertierenPage() {
 
   // ---- Office → PDF ----
   const [officeFile, setOfficeFile] = useState<File | null>(null);
-  const [serverMessage, setServerMessage] = useState<string | null>(null);
   const [serverResult, setServerResult] = useState<{
     blob: Blob;
     filename: string;
@@ -146,62 +145,18 @@ export default function KonvertierenPage() {
   } | null>(null);
 
   const serverEnabled = serverStatus?.enabled === true;
-  const officeIsDocx = officeFile?.name.toLowerCase().endsWith(".docx") === true;
-
-  const runOfficeConversion = () =>
-    processing.run("Datei wird an den Server übertragen …", async ({ report }) => {
-      if (!serverEnabled) throw new Error("Server nicht eingerichtet");
-      if (!officeFile) return null;
-
-      const format = officeFile.name.toLowerCase().endsWith(".docx")
-        ? "docx-pdf"
-        : officeFile.name.toLowerCase().endsWith(".pptx")
-          ? "pptx-pdf"
-          : "xlsx-pdf";
-
-      const formData = new FormData();
-      formData.append("file", officeFile, officeFile.name);
-      report(30);
-
-      const response = await fetch(`/api/convert/${format}`, { method: "POST", body: formData });
-      if (!response.ok) {
-        const detail = (await response.json().catch(() => ({}))) as { error?: string };
-        throw Object.assign(new Error(detail.error ?? `Serverfehler (${response.status})`));
-      }
-      report(80);
-      const blob = await response.blob();
-      const resultPayload = {
-        blob,
-        filename: `${sanitizeFilename(officeFile.name)}.pdf`,
-        mime: "application/pdf",
-      };
-      setServerResult(resultPayload);
-      report(100);
-      return resultPayload;
-    });
 
   const tryOfficeConversion = () => {
-    if (officeFile && officeIsDocx) {
-      setServerMessage(null);
-      void processing.run("Word-Dokument wird lokal in PDF umgewandelt …", async ({ report }) => {
-        const blob = await docxToPdf(officeFile, report);
-        setServerResult({
-          blob,
-          filename: `${sanitizeFilename(officeFile.name.replace(/\.docx$/i, ""))}.pdf`,
-          mime: "application/pdf",
-        });
-        return blob;
+    if (!officeFile) return;
+    void processing.run("Office-Dokument wird lokal in PDF umgewandelt …", async ({ report }) => {
+      const blob = await officeToPdf(officeFile, report);
+      setServerResult({
+        blob,
+        filename: `${sanitizeFilename(officeFile.name.replace(/\.(docx|pptx|xlsx)$/i, ""))}.pdf`,
+        mime: "application/pdf",
       });
-      return;
-    }
-    if (!serverEnabled) {
-      setServerMessage(
-        "Für diese Konvertierung ist ein Verarbeitungsserver erforderlich, der aktuell nicht eingerichtet ist.",
-      );
-      return;
-    }
-    setServerMessage(null);
-    void runOfficeConversion();
+      return blob;
+    });
   };
 
   const serverBadge = (
@@ -214,7 +169,7 @@ export default function KonvertierenPage() {
   return (
     <ToolShell
       title="PDF konvertieren"
-      description="Wandle PDFs in Bilder, Text oder HTML um und zurück. Auch DOCX wird komplett lokal in PDF umgewandelt; amber markierte Funktionen benötigen optional einen Server."
+      description="Wandle PDFs in Bilder, Text oder HTML um und zurück. DOCX, PPTX und XLSX werden komplett lokal in PDF umgewandelt; amber markierte Funktionen benötigen optional einen Server."
       privacy="mixed"
     >
       {processing.error && (
@@ -486,16 +441,9 @@ export default function KonvertierenPage() {
         {/* ---------- Office → PDF ---------- */}
         <TabsContent value="office">
           <div className="max-w-xl space-y-4">
-            {serverMessage ? (
-              <ErrorAlert
-                error={{ message: serverMessage }}
-                onDismiss={() => setServerMessage(null)}
-              />
-            ) : null}
             <FileDropzone
               accept="office"
               onFiles={(files) => {
-                setServerMessage(null);
                 setServerResult(null);
                 setOfficeFile(files[0] ?? null);
               }}
@@ -506,13 +454,9 @@ export default function KonvertierenPage() {
                   {officeFile.name} ({formatBytes(officeFile.size)})
                 </p>
                 <Button onClick={tryOfficeConversion}>Zu PDF konvertieren</Button>
-                {officeIsDocx ? (
-                  <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-900/50 dark:text-green-100">
-                    Lokal · kein Upload
-                  </span>
-                ) : !serverEnabled ? (
-                  serverBadge
-                ) : null}
+                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-900/50 dark:text-green-100">
+                  Lokal · kein Upload
+                </span>
               </div>
             ) : null}
             {serverResult && (
@@ -523,11 +467,11 @@ export default function KonvertierenPage() {
                 mime={serverResult.mime}
               />
             )}
-            <InfoAlert title="Lokale und serverbasierte Umwandlung">
-              DOCX wird direkt auf deinem Gerät mit echten Seitengrößen und automatischen
-              Seitenumbrüchen in PDF umgewandelt. Text bleibt im Ergebnis auswählbar, Tabellen und
-              Linien werden als Vektoren ausgegeben. PPTX und XLSX benötigen für eine zuverlässige
-              Umwandlung weiterhin einen eingerichteten Server mit LibreOffice.
+            <InfoAlert title="Lokale Office-Umwandlung">
+              DOCX, PPTX und XLSX werden direkt auf deinem Gerät in PDF umgewandelt. Word erhält
+              echte Seiten und automatische Seitenumbrüche, PowerPoint übernimmt jede Folie als
+              eigene PDF-Seite und Excel verwendet die im Dokument gespeicherten Druckbereiche und
+              Seiteneinstellungen. Deine Datei wird nicht hochgeladen.
             </InfoAlert>
           </div>
         </TabsContent>
