@@ -45,7 +45,10 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setUserAgentString(settings.getUserAgentString() + " CoroaPDFAndroid/1.0");
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setUserAgentString(settings.getUserAgentString() + " CoroaPDFAndroid/1.1");
 
         webView.addJavascriptInterface(androidBridge, "CoroaPDFAndroid");
         webView.setWebViewClient(new CoroaWebViewClient());
@@ -126,14 +129,37 @@ public class MainActivity extends Activity {
     }
 
     private final class CoroaWebViewClient extends WebViewClient {
+        private boolean openUri(WebView view, Uri uri) {
+            if (uri == null) return true;
+
+            String host = uri.getHost();
+            String scheme = uri.getScheme();
+            if ("coroapdf.vercel.app".equalsIgnoreCase(host) && "https".equalsIgnoreCase(scheme)) {
+                // Load internal links explicitly in the existing WebView. This
+                // avoids Android handing the navigation back to the launcher or
+                // restoring the homepage activity.
+                view.loadUrl(uri.toString());
+                return true;
+            }
+
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            } catch (Exception error) {
+                Toast.makeText(MainActivity.this, "Link konnte nicht geöffnet werden.", Toast.LENGTH_LONG).show();
+            }
+            return true;
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            Uri uri = request.getUrl();
-            if ("coroapdf.vercel.app".equals(uri.getHost()) && "https".equals(uri.getScheme())) {
-                return false;
-            }
-            startActivity(new Intent(Intent.ACTION_VIEW, uri));
-            return true;
+            if (!request.isForMainFrame()) return false;
+            return openUri(view, request.getUrl());
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            return openUri(view, Uri.parse(url));
         }
     }
 

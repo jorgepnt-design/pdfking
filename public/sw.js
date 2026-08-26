@@ -1,5 +1,5 @@
 /* CoroaPDF Service Worker – eingeschränkte Offline-Nutzung der App-Shell. */
-const CACHE_VERSION = "coroapdf-v5";
+const CACHE_VERSION = "coroapdf-v6";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
