@@ -5,6 +5,7 @@ import {
   createTextElement,
   moveElement,
   resizeImageElement,
+  resizeTextElement,
 } from "../src/lib/editor/model";
 import { DEFAULT_EDITOR_STYLE } from "../src/lib/editor/model";
 
@@ -128,5 +129,22 @@ describe("Element-Fabriken", () => {
     expect(resized.x).toBeGreaterThanOrEqual(0);
     expect(resized.y).toBeGreaterThanOrEqual(0);
     expect(resized.width / resized.height).toBeCloseTo(3);
+  });
+
+  it("ändert die Breite eines Textfeldes über den rechten Griff", () => {
+    const text = createTextElement(0, 100, 80, DEFAULT_EDITOR_STYLE);
+    const resized = resizeTextElement(text, "e", 180, 600);
+
+    expect(resized.x).toBe(100);
+    expect(resized.width).toBe(420);
+    expect(resized.height).toBe(text.height);
+  });
+
+  it("hält Textfelder beim Verbreitern innerhalb der Seite", () => {
+    const text = createTextElement(0, 100, 80, DEFAULT_EDITOR_STYLE);
+    const resized = resizeTextElement(text, "w", -500, 600);
+
+    expect(resized.x).toBe(0);
+    expect(resized.width).toBe(340);
   });
 });

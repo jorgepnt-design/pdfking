@@ -47,7 +47,9 @@ import {
   HistoryStore,
   moveElement,
   resizeImageElement,
+  resizeTextElement,
   type ImageResizeHandle,
+  type TextResizeHandle,
   type EditorStyleDefaults,
 } from "@/lib/editor/model";
 import { loadEditorDraft, saveEditorDraft } from "@/lib/editor/draft";
@@ -122,7 +124,7 @@ function EditorInner() {
     id?: string;
     startPoint?: { x: number; y: number };
     original?: EditorElement;
-    resizeHandle?: ImageResizeHandle;
+    resizeHandle?: ImageResizeHandle | TextResizeHandle;
     lastPoint?: { x: number; y: number };
   } | null>(null);
   const [draftRect, setDraftRect] = useState<{
@@ -442,14 +444,17 @@ function EditorInner() {
       const targetId = target.closest("[data-elem]")?.getAttribute("data-elem");
       const resizeHandle = target
         .closest("[data-resize-handle]")
-        ?.getAttribute("data-resize-handle") as ImageResizeHandle | null;
+        ?.getAttribute("data-resize-handle") as ImageResizeHandle | TextResizeHandle | null;
       if (targetId) {
         const element = (pages[pageIndex] ?? []).find((candidate) => candidate.id === targetId);
         if (element) {
           setSelectedId(targetId);
           historyRef.current.push(pages);
           dragRef.current = {
-            mode: resizeHandle && element.kind === "image" ? "resize" : "move",
+            mode:
+              resizeHandle && (element.kind === "image" || element.kind === "text")
+                ? "resize"
+                : "move",
             id: targetId,
             startPoint: point,
             original: structuredClone(element),
@@ -567,11 +572,34 @@ function EditorInner() {
       const dy = point.y - drag.startPoint.y;
       const resized = resizeImageElement(
         drag.original,
-        drag.resizeHandle,
+        drag.resizeHandle as ImageResizeHandle,
         dx,
         dy,
         pageSize.width,
         pageSize.height,
+      );
+      setPages((current) => ({
+        ...current,
+        [pageIndex]: (current[pageIndex] ?? []).map((element) =>
+          element.id === drag.id ? resized : element,
+        ),
+      }));
+      return;
+    }
+
+    if (
+      drag.mode === "resize" &&
+      drag.startPoint &&
+      drag.original?.kind === "text" &&
+      drag.resizeHandle &&
+      pageSize
+    ) {
+      const dx = point.x - drag.startPoint.x;
+      const resized = resizeTextElement(
+        drag.original,
+        drag.resizeHandle as TextResizeHandle,
+        dx,
+        pageSize.width,
       );
       setPages((current) => ({
         ...current,
@@ -918,6 +946,10 @@ function EditorInner() {
 
           {selected?.kind === "text" ? (
             <>
+              <InfoAlert title="Textfeldbreite ändern">
+                Ziehe den blauen Griff links oder rechts am Textfeld. So kannst du den Text auf eine
+                Zeile verbreitern, ohne die Schriftgröße zu verändern.
+              </InfoAlert>
               <div>
                 <FieldLabel htmlFor="prop-text">Inhalt</FieldLabel>
                 <textarea
@@ -1302,6 +1334,18 @@ function ElementsLayer({
                 }}
               >
                 {element.text}
+                {isSelected
+                  ? (["w", "e"] as const).map((handle) => (
+                      <span
+                        key={handle}
+                        data-resize-handle={handle}
+                        aria-hidden
+                        className={`absolute top-1/2 h-7 w-4 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-blue-700 shadow ${
+                          handle === "w" ? "-left-2 cursor-ew-resize" : "-right-2 cursor-ew-resize"
+                        }`}
+                      />
+                    ))
+                  : null}
               </div>
             );
           case "image":

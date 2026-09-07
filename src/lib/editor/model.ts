@@ -232,6 +232,7 @@ export function createImageElement(
 }
 
 export type ImageResizeHandle = "nw" | "ne" | "sw" | "se";
+export type TextResizeHandle = "w" | "e";
 
 export function resizeImageElement(
   element: ImageElement,
@@ -270,6 +271,23 @@ export function resizeImageElement(
     y: handle.includes("n") ? element.y + element.height - height : element.y,
     width,
     height,
+  };
+}
+
+export function resizeTextElement(
+  element: TextElement,
+  handle: TextResizeHandle,
+  dx: number,
+  pageWidth: number,
+): TextElement {
+  const proposedWidth = element.width + (handle === "e" ? dx : -dx);
+  const maximumWidth = handle === "e" ? pageWidth - element.x : element.x + element.width;
+  const width = Math.max(24, Math.min(proposedWidth, maximumWidth));
+
+  return {
+    ...element,
+    x: handle === "w" ? element.x + element.width - width : element.x,
+    width,
   };
 }
 
