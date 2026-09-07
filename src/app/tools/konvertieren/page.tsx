@@ -73,8 +73,8 @@ export default function KonvertierenPage() {
   };
 
   const convertImagesToPdf = () =>
-    processing.run("Bilder werden zu einem PDF …", async ({ report }) => {
-      const bytes = await imagesToPdf(imageList, report);
+    processing.run("Bilder werden zu einem PDF …", async ({ report, token }) => {
+      const bytes = await imagesToPdf(imageList, report, token);
       setImagesPdf(bytes);
       return bytes;
     });

@@ -11,6 +11,20 @@ export interface PageText {
   text: string;
 }
 
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Zeitüberschreitung")), milliseconds);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 export async function pdfToImages(
   bytes: Uint8Array,
   format: ImageExportFormat,
@@ -44,10 +58,12 @@ export async function pdfToImages(
 export async function imagesToPdf(
   files: File[],
   onProgress?: (percent: number) => void,
+  token = new SimpleCancellation(),
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
 
   for (let index = 0; index < files.length; index++) {
+    token.throwIfCancelled();
     const file = files[index];
     const isHeic =
       /\.(heic|heif)$/i.test(file.name) ||
@@ -57,14 +73,23 @@ export async function imagesToPdf(
     let source: Blob = file;
     if (isHeic) {
       try {
-        const { default: heic2any } = await import("heic2any");
-        const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
-        source = Array.isArray(converted) ? converted[0] : converted;
+        // Der bisherige heic2any-Decoder kann in Android-WebViews dauerhaft hängen bleiben.
+        // heic-to nutzt einen aktuellen libheif-Decoder; die CSP-Variante funktioniert mit
+        // der strengen Sicherheitsrichtlinie der App. Fortschritt und Zeitlimit verhindern,
+        // dass die Oberfläche bei einer defekten oder zu großen Datei endlos blockiert bleibt.
+        onProgress?.(Math.max(1, Math.round(((index + 0.1) / files.length) * 100)));
+        await yieldToUi();
+        const { heicTo } = await import("heic-to/csp");
+        source = await withTimeout(
+          heicTo({ blob: file, type: "image/jpeg", quality: 0.9 }),
+          60_000,
+        );
+        token.throwIfCancelled();
       } catch {
         throw new AppError(
           "INVALID_TYPE",
           `„${file.name}" konnte nicht als HEIC/HEIF-Bild gelesen werden.`,
-          "Prüfe, ob die Datei vollständig und unbeschädigt ist.",
+          "Prüfe, ob die Datei vollständig ist. Bei sehr großen Fotos versuche es bitte einzeln.",
         );
       }
     }
