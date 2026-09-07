@@ -553,6 +553,8 @@ function EditorInner() {
     if (drag.mode === "move" && drag.startPoint && drag.original) {
       const dx = point.x - drag.startPoint.x;
       const dy = point.y - drag.startPoint.y;
+      // Ein normales Antippen darf das Element auf Touch-Geräten nicht verschieben.
+      if (Math.hypot(dx, dy) < 3) return;
       setPages((current) => ({
         ...current,
         [pageIndex]: (current[pageIndex] ?? []).map((element) =>
@@ -731,6 +733,16 @@ function EditorInner() {
 
   const displayWidth = pageSize ? Math.min(760, documentViewportWidth) * zoom : 600;
 
+  const changePage = (nextPageIndex: number) => {
+    if (nextPageIndex === pageIndex) return;
+    dragRef.current = null;
+    setDraftRect(null);
+    setSelectedId(null);
+    // Verhindert, dass Elemente der neuen Seite kurz mit den Maßen der alten Seite berechnet werden.
+    setPageSize(null);
+    setPageIndex(nextPageIndex);
+  };
+
   return (
     <ToolShell
       title="PDF bearbeiten"
@@ -822,7 +834,7 @@ function EditorInner() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setPageIndex((index) => Math.max(0, index - 1))}
+              onClick={() => changePage(Math.max(0, pageIndex - 1))}
               disabled={pageIndex === 0}
             >
               ←
@@ -833,7 +845,7 @@ function EditorInner() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setPageIndex((index) => Math.min(jsDoc.numPages - 1, index + 1))}
+              onClick={() => changePage(Math.min(jsDoc.numPages - 1, pageIndex + 1))}
               disabled={pageIndex >= jsDoc.numPages - 1}
             >
               →
@@ -888,36 +900,38 @@ function EditorInner() {
                 rotation={pageRotations[pageIndex] ?? 0}
               />
               {/* Overlay */}
-              <div
-                ref={overlayRef}
-                role="application"
-                aria-label={`Bearbeitungsebene Seite ${pageIndex + 1}. Aktives Werkzeug: ${TOOL_ITEMS.find((item) => item.id === tool)?.label}`}
-                className={
-                  "absolute inset-0 " + (tool === "select" ? "" : "cursor-crosshair touch-none")
-                }
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-              >
-                <ElementsLayer
-                  elements={pageElements}
-                  scale={pageSize ? displayWidth / pageSize.width : 1}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                />
-                {draftRect ? (
-                  <div
-                    aria-hidden
-                    className={`pointer-events-none absolute border-2 border-dashed border-blue-600 ${tool === "eraser" ? "bg-white" : "bg-blue-500/10"}`}
-                    style={{
-                      left: `${draftRect.x * (displayWidth / (pageSize?.width ?? 1))}px`,
-                      top: `${draftRect.y * (displayWidth / (pageSize?.width ?? 1))}px`,
-                      width: `${draftRect.width * (displayWidth / (pageSize?.width ?? 1))}px`,
-                      height: `${draftRect.height * (displayWidth / (pageSize?.width ?? 1))}px`,
-                    }}
+              {pageSize ? (
+                <div
+                  ref={overlayRef}
+                  role="application"
+                  aria-label={`Bearbeitungsebene Seite ${pageIndex + 1}. Aktives Werkzeug: ${TOOL_ITEMS.find((item) => item.id === tool)?.label}`}
+                  className={
+                    "absolute inset-0 " + (tool === "select" ? "" : "cursor-crosshair touch-none")
+                  }
+                  onPointerDown={onPointerDown}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                >
+                  <ElementsLayer
+                    elements={pageElements}
+                    scale={displayWidth / pageSize.width}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
                   />
-                ) : null}
-              </div>
+                  {draftRect ? (
+                    <div
+                      aria-hidden
+                      className={`pointer-events-none absolute border-2 border-dashed border-blue-600 ${tool === "eraser" ? "bg-white" : "bg-blue-500/10"}`}
+                      style={{
+                        left: `${draftRect.x * (displayWidth / pageSize.width)}px`,
+                        top: `${draftRect.y * (displayWidth / pageSize.width)}px`,
+                        width: `${draftRect.width * (displayWidth / pageSize.width)}px`,
+                        height: `${draftRect.height * (displayWidth / pageSize.width)}px`,
+                      }}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
