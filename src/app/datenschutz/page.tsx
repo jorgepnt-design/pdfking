@@ -68,9 +68,8 @@ export default function DatenschutzPage() {
           <p>
             Gespeicherte Unterschriften bleiben zu 100 % auf deinem Gerät. Sie werden in einer
             lokalen Browser-Datenbank (IndexedDB) abgelegt und mit AES-256-GCM verschlüsselt. Der
-            Schlüssel wird aus deiner persönlichen Passphrase abgeleitet (PBKDF2) und niemals
-            gespeichert oder übertragen. Ohne deine Passphrase sind die Daten – auch für den
-            Betreiber – nicht lesbar.
+            Zugriff erfolgt automatisch und ohne Passwortabfrage. Die Unterschriften werden nicht an
+            den Betreiber oder einen Server übertragen.
           </p>
           <p>
             Hinweis: Das Einfügen einer sichtbaren Unterschrift ist keine qualifizierte

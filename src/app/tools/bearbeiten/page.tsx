@@ -51,7 +51,7 @@ import {
 import { loadEditorDraft, saveEditorDraft } from "@/lib/editor/draft";
 import { flattenEditorElements } from "@/lib/pdf/annotate";
 import { loadPdfJsDocument, renderPageToCanvas } from "@/lib/pdf/pdfjs";
-import { decryptFromStorage, isSessionUnlocked } from "@/lib/signatures/session";
+import { decryptFromStorage } from "@/lib/signatures/session";
 import { arrayBufferToDataUrl } from "@/lib/signatures/encoding";
 import { listSignatures, loadSignaturePayload } from "@/lib/signatures/store";
 import type { EditorElement, EditorTool, FontFamily, PageElements, TextAlign } from "@/lib/types";
@@ -138,7 +138,6 @@ function EditorInner() {
   const [signatures, setSignatures] = useState<
     Array<{ id: string; name: string; dataUrl: string }>
   >([]);
-  const [signaturesUnlocked, setSignaturesUnlocked] = useState(true);
   const destroyRef = useRef<(() => Promise<void>) | null>(null);
 
   // Export
@@ -254,12 +253,6 @@ function EditorInner() {
 
   // Werkzeug-Vorwahl per URL – Effect folgt unterhalb der Definition.
   const openSignaturePicker = async () => {
-    if (!isSessionUnlocked()) {
-      setSignaturesUnlocked(false);
-      setSignDialogOpen(true);
-      return;
-    }
-    setSignaturesUnlocked(true);
     await processing.run("Unterschriften werden geladen …", async () => {
       const metas = await listSignatures();
       const loaded: Array<{ id: string; name: string; dataUrl: string }> = [];
@@ -662,12 +655,7 @@ function EditorInner() {
   const exportPdf = () =>
     processing.run("Änderungen werden ins PDF übertragen …", async ({ report }) => {
       if (!pdfBytesRef.current) return null;
-      const bytes = await flattenEditorElements(
-        pdfBytesRef.current,
-        pages,
-        report,
-        pageRotations,
-      );
+      const bytes = await flattenEditorElements(pdfBytesRef.current, pages, report, pageRotations);
       setExportedBytes(bytes);
       return bytes;
     });
@@ -1061,8 +1049,6 @@ function EditorInner() {
             </Button>
           ) : null}
 
-          {!signaturesUnlocked ? null : null}
-
           <hr className="border-slate-200 dark:border-slate-700" />
           <Button
             className="w-full"
@@ -1100,53 +1086,40 @@ function EditorInner() {
           title="Bild oder Unterschrift einfügen"
           description="Wähle eine gespeicherte Unterschrift oder lade ein eigenes Bild hoch."
         >
-          {signaturesUnlocked ? (
-            <div className="space-y-4">
-              {signatures.length > 0 ? (
-                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {signatures.map((signature) => (
-                    <li key={signature.id}>
-                      <button
-                        type="button"
-                        onClick={() => void pickSignature(signature.dataUrl)}
-                        className="w-full rounded-xl border border-slate-200 p-2 transition hover:border-blue-600 dark:border-slate-700"
-                      >
-                        <span className="flex h-20 items-center justify-center overflow-hidden rounded bg-white">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={signature.dataUrl}
-                            alt={signature.name}
-                            className="max-h-full max-w-full object-contain"
-                          />
-                        </span>
-                        <span className="mt-1 block truncate text-xs">{signature.name}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <InfoAlert>Noch keine Unterschriften gespeichert.</InfoAlert>
-              )}
-              <button
-                type="button"
-                onClick={() => document.getElementById("editor-image-input")?.click()}
-                className="w-full rounded-xl border-2 border-dashed border-slate-300 p-4 text-sm font-medium text-slate-600 hover:border-blue-500 dark:border-slate-600 dark:text-slate-300"
-              >
-                Eigenes PNG/JPG hochladen …
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3 text-sm">
-              <p>Dein Unterschriftenspeicher ist gesperrt.</p>
-              <button
-                type="button"
-                onClick={() => void manageSignatures()}
-                className="inline-flex h-10 items-center rounded-lg bg-blue-700 px-4 font-semibold text-white hover:bg-blue-800"
-              >
-                Zum Entsperren / Erstellen
-              </button>
-            </div>
-          )}
+          <div className="space-y-4">
+            {signatures.length > 0 ? (
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {signatures.map((signature) => (
+                  <li key={signature.id}>
+                    <button
+                      type="button"
+                      onClick={() => void pickSignature(signature.dataUrl)}
+                      className="w-full rounded-xl border border-slate-200 p-2 transition hover:border-blue-600 dark:border-slate-700"
+                    >
+                      <span className="flex h-20 items-center justify-center overflow-hidden rounded bg-white">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={signature.dataUrl}
+                          alt={signature.name}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </span>
+                      <span className="mt-1 block truncate text-xs">{signature.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <InfoAlert>Noch keine Unterschriften gespeichert.</InfoAlert>
+            )}
+            <button
+              type="button"
+              onClick={() => document.getElementById("editor-image-input")?.click()}
+              className="w-full rounded-xl border-2 border-dashed border-slate-300 p-4 text-sm font-medium text-slate-600 hover:border-blue-500 dark:border-slate-600 dark:text-slate-300"
+            >
+              Eigenes PNG/JPG hochladen …
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 

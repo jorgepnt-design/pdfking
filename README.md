@@ -23,7 +23,7 @@ CoroaPDF ist eine Open-Source-Web-App zum Bearbeiten, Organisieren, Verkleinern,
 
 - Unterschrift zeichnen (Maus/Touch/Stift), als Bild hochladen oder aus dem Namen erzeugen
 - Weißer Hintergrund wird automatisch transparent gemacht
-- **AES-256-GCM-verschlüsselte Speicherung** im Browser; Schlüsselableitung per PBKDF2 aus deiner Passphrase
+- **AES-256-GCM-verschlüsselte Speicherung** im Browser; automatischer Zugriff ohne Passwortabfrage
 - Mehrere Unterschriften verwalten, einzeln oder komplett löschen
 - Platzieren per Editor – niemals ohne ausdrückliche Zustimmung auf einem Server
 

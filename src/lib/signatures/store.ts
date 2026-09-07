@@ -139,7 +139,7 @@ export interface SignatureBackup {
   }>;
 }
 
-/** Exportiert nur bereits verschlüsselte Datensätze – niemals die Passphrase oder Klartextbilder. */
+/** Exportiert nur bereits verschlüsselte Datensätze – niemals Klartextbilder. */
 export async function exportSignatureBackup(): Promise<SignatureBackup> {
   const salt = await getSignatureSalt();
   const signatures = await withStore<StoredSignature[]>(

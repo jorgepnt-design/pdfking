@@ -6,6 +6,7 @@ import { getSignatureSalt, saveSignatureSalt } from "./store";
 
 const SALT_STORAGE_KEY = "pdfking.signature.salt";
 const PBKDF2_ITERATIONS = 250_000;
+const AUTOMATIC_KEY_MATERIAL = "coroapdf-local-signature-storage-v1";
 
 let sessionKey: CryptoKey | null = null;
 
@@ -60,13 +61,13 @@ async function getOrCreateSalt(): Promise<Uint8Array> {
   return salt;
 }
 
-/** Leitet den Sitzungsschlüssel aus der Passphrase ab (PBKDF2, SHA-256). */
-export async function unlockSignatureStore(passphrase: string): Promise<void> {
-  if (!passphrase) throw new AppError("INVALID_TYPE", "Bitte gib eine Passphrase ein.");
+/** Öffnet den lokalen Speicher automatisch, ohne eine Benutzereingabe zu verlangen. */
+export async function unlockSignatureStore(): Promise<void> {
+  if (sessionKey) return;
   const salt = (await getOrCreateSalt()) as unknown as BufferSource;
   const keyMaterial = await subtle().importKey(
     "raw",
-    new TextEncoder().encode(passphrase),
+    new TextEncoder().encode(AUTOMATIC_KEY_MATERIAL),
     "PBKDF2",
     false,
     ["deriveKey"],
@@ -89,7 +90,7 @@ function requireKey(): CryptoKey {
     throw new AppError(
       "UNKNOWN",
       "Der Unterschriftenspeicher ist gesperrt.",
-      "Bitte entsperre ihn zuerst mit deiner Passphrase.",
+      "Bitte lade die Seite neu.",
     );
   }
   return sessionKey;
@@ -101,6 +102,7 @@ export interface EncryptedBlob {
 }
 
 export async function encryptForStorage(plaintext: ArrayBuffer): Promise<EncryptedBlob> {
+  await unlockSignatureStore();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = await subtle().encrypt({ name: "AES-GCM", iv }, requireKey(), plaintext);
   return { ivB64: toBase64(iv), cipher };
@@ -108,13 +110,14 @@ export async function encryptForStorage(plaintext: ArrayBuffer): Promise<Encrypt
 
 export async function decryptFromStorage(blob: EncryptedBlob): Promise<ArrayBuffer> {
   try {
+    await unlockSignatureStore();
     const iv = fromBase64(blob.ivB64) as unknown as BufferSource;
     return await subtle().decrypt({ name: "AES-GCM", iv }, requireKey(), blob.cipher);
   } catch {
     throw new AppError(
       "WRONG_PASSWORD",
       "Die gespeicherten Unterschriften konnten nicht entschlüsselt werden.",
-      "Vermutlich wurde mit einer anderen Passphrase verschlüsselt. Ohne die richtige Passphrase sind sie nicht wiederherstellbar.",
+      "Diese Unterschrift stammt möglicherweise aus der früheren passwortgeschützten Version und muss neu gespeichert werden.",
     );
   }
 }

@@ -1,17 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  DownloadCloud,
-  Eraser,
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  LockOpen,
-  PenTool,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, DownloadCloud, Eraser, PenTool, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FileDropzone } from "@/components/shared/file-dropzone";
 import { ProcessingOverlay } from "@/components/shared/processing-overlay";
@@ -40,8 +30,6 @@ import {
 import {
   decryptFromStorage,
   encryptForStorage,
-  isSessionUnlocked,
-  lockSignatureStore,
   unlockSignatureStore,
 } from "@/lib/signatures/session";
 import { uid } from "@/lib/utils";
@@ -50,9 +38,6 @@ import { validateImageFile } from "@/lib/validate";
 export default function UnterschreibenPage() {
   const processing = useProcessing();
   const [returnToEditor, setReturnToEditor] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
-  const [showPassphrase, setShowPassphrase] = useState(false);
   const [signatures, setSignatures] = useState<StoredSignatureMeta[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [nameInput, setNameInput] = useState("");
@@ -68,7 +53,6 @@ export default function UnterschreibenPage() {
   const [penWidth, setPenWidth] = useState(3);
 
   const refreshList = useCallback(async () => {
-    if (!isSessionUnlocked()) return;
     const metas = await listSignatures();
     setSignatures(metas);
     setLocalSignatureCount(metas.length);
@@ -87,13 +71,11 @@ export default function UnterschreibenPage() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setUnlocked(isSessionUnlocked()), 0);
     setIsCoroaHost(window.location.hostname === "coroapdf.vercel.app");
-    void listSignatures()
-      .then((items) => setLocalSignatureCount(items.length))
+    void unlockSignatureStore()
+      .then(() => refreshList())
       .catch(() => setLocalSignatureCount(0));
-    return () => window.clearTimeout(timer);
-  }, []);
+  }, [refreshList]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -139,18 +121,17 @@ export default function UnterschreibenPage() {
       if (event.data?.type !== "COROAPDF_SIGNATURE_MIGRATION") return;
       void processing.run("Alte Unterschriften werden übernommen …", async () => {
         const count = await importSignatureBackup(event.data.backup as SignatureBackup);
-        lockSignatureStore();
-        setUnlocked(false);
         setLocalSignatureCount(count);
         setMigrationMessage(
-          `${count} Unterschrift${count === 1 ? " wurde" : "en wurden"} übernommen. Entsperre sie jetzt mit deiner bisherigen Passphrase.`,
+          `${count} Unterschrift${count === 1 ? " wurde" : "en wurden"} übernommen.`,
         );
+        await refreshList();
         return true;
       });
     };
     window.addEventListener("message", receiveMigration);
     return () => window.removeEventListener("message", receiveMigration);
-  }, [processing.run]);
+  }, [processing.run, refreshList]);
 
   const migrateOldSignatures = () => {
     processing.clearError();
@@ -169,27 +150,6 @@ export default function UnterschreibenPage() {
   useEffect(() => {
     setReturnToEditor(new URLSearchParams(window.location.search).get("returnTo") === "editor");
   }, []);
-
-  useEffect(() => {
-    if (!unlocked) return;
-    const timer = window.setTimeout(() => void refreshList(), 0);
-    return () => window.clearTimeout(timer);
-  }, [unlocked, refreshList]);
-
-  const unlock = async () => {
-    processing.clearError();
-    await processing.run("Speicher wird entschlüsselt …", async () => {
-      await unlockSignatureStore(passphrase);
-      setUnlocked(true);
-      setPassphrase("");
-      return true;
-    });
-  };
-
-  const lock = () => {
-    lockSignatureStore();
-    setUnlocked(false);
-  };
 
   const persist = async (dataUrl: string, name: string, source: SignatureSource) => {
     const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
@@ -336,9 +296,9 @@ export default function UnterschreibenPage() {
       ) : null}
 
       <WarningAlert title="Rechtlicher Hinweis">
-        CoroaPDF fügt eine <strong>sichtbare</strong> Unterschrift in das Dokument ein. Das ist keine
-        qualifizierte elektronische Signatur (QES) im Sinne der eIDAS-Verordnung und ersetzt keine
-        kryptografische Signatur.
+        CoroaPDF fügt eine <strong>sichtbare</strong> Unterschrift in das Dokument ein. Das ist
+        keine qualifizierte elektronische Signatur (QES) im Sinne der eIDAS-Verordnung und ersetzt
+        keine kryptografische Signatur.
       </WarningAlert>
 
       {migrationMessage ? (
@@ -364,237 +324,181 @@ export default function UnterschreibenPage() {
         </section>
       ) : null}
 
-      {!unlocked ? (
-        <section className="mx-auto mt-8 max-w-md space-y-4 rounded-xl border border-slate-200 p-6 dark:border-slate-800">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <LockKeyhole aria-hidden className="h-5 w-5 text-blue-700 dark:text-blue-400" />
-            Unterschriftenspeicher entsperren
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Deine Unterschriften werden mit einer Passphrase verschlüsselt, die niemals gespeichert
-            wird. Vergiss sie nicht – ohne sie sind bereits gespeicherte Unterschriften nicht
-            wiederherstellbar.
-          </p>
-          <div>
-            <FieldLabel htmlFor="passphrase">Passphrase</FieldLabel>
-            <div className="relative">
-              <Input
-                id="passphrase"
-                type={showPassphrase ? "text" : "password"}
-                value={passphrase}
-                autoComplete="off"
-                className="pr-11"
-                onChange={(event) => setPassphrase(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && unlock()}
-              />
-              <button
-                type="button"
-                aria-label={showPassphrase ? "Passphrase ausblenden" : "Passphrase anzeigen"}
-                title={showPassphrase ? "Passphrase ausblenden" : "Passphrase anzeigen"}
-                aria-pressed={showPassphrase}
-                onClick={() => setShowPassphrase((visible) => !visible)}
-                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-lg text-slate-500 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 dark:text-slate-400 dark:hover:text-white"
-              >
-                {showPassphrase ? (
-                  <EyeOff aria-hidden className="h-5 w-5" />
-                ) : (
-                  <Eye aria-hidden className="h-5 w-5" />
-                )}
-              </button>
+      <div className="space-y-8">
+        {/* Gespeicherte Unterschriften */}
+        <section
+          aria-label="Gespeicherte Unterschriften"
+          className="space-y-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Gespeichert ({signatures.length})</h2>
+            <div className="flex gap-2">
+              {signatures.length > 0 ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => void removeAll()}
+                  disabled={processing.state.active}
+                >
+                  <Trash2 aria-hidden className="mr-1 h-3.5 w-3.5" /> Alle löschen
+                </Button>
+              ) : null}
             </div>
-            <p id="passphrase-hint" className="mt-1 text-xs text-slate-500">
-              Erste Nutzung? Denk dir eine aus – sie verschlüsselt ab jetzt alle Unterschriften.
-            </p>
           </div>
-          <Button
-            className="w-full"
-            onClick={unlock}
-            disabled={!passphrase || processing.state.active}
-          >
-            <LockOpen aria-hidden className="mr-1.5 h-4 w-4" /> Entsperren
-          </Button>
+
+          {signatures.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Noch keine Unterschrift gespeichert. Erstelle unten eine.
+            </p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {signatures.map((signature) => (
+                <li
+                  key={signature.id}
+                  className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"
+                >
+                  <div className="flex h-24 items-center justify-center rounded-lg bg-white p-2 dark:bg-white">
+                    {previews[signature.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={previews[signature.id]}
+                        alt={`Vorschau ${signature.name}`}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-xs text-red-600">Entschlüsselung fehlgeschlagen</span>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-medium">{signature.name}</p>
+                    <button
+                      type="button"
+                      aria-label={`${signature.name} löschen`}
+                      onClick={() => void removeOne(signature.id)}
+                      className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+                    >
+                      <Trash2 aria-hidden className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {signature.source === "draw"
+                      ? "Gezeichnet"
+                      : signature.source === "upload"
+                        ? "Hochgeladen"
+                        : "Aus Name"}{" "}
+                    · {new Date(signature.createdAt).toLocaleDateString("de-DE")}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
-      ) : (
-        <div className="space-y-8">
-          {/* Gespeicherte Unterschriften */}
-          <section
-            aria-label="Gespeicherte Unterschriften"
-            className="space-y-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-semibold">Gespeichert ({signatures.length})</h2>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={lock}>
-                  Sperren
+
+        {/* Neue Unterschrift */}
+        <Tabs defaultValue="zeichnen">
+          <TabsList>
+            <TabsTrigger value="zeichnen">
+              <PenTool aria-hidden className="h-4 w-4" /> Zeichnen
+            </TabsTrigger>
+            <TabsTrigger value="hochladen">Bild hochladen</TabsTrigger>
+            <TabsTrigger value="name">Aus Name erzeugen</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="zeichnen">
+            <div className="space-y-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
+              <label htmlFor="sig-pad-label" className="block text-sm font-medium">
+                Mit Maus, Finger oder Stift zeichnen:
+              </label>
+              <div id="sig-pad-label" className="sr-only">
+                Zeichenfläche für Unterschrift
+              </div>
+              <div className="overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-white dark:border-slate-600">
+                <canvas
+                  ref={padRef}
+                  width={900}
+                  height={300}
+                  role="img"
+                  aria-label="Zeichenfläche"
+                  className="block h-44 w-full cursor-crosshair touch-none sm:h-56"
+                  onPointerDown={startStroke}
+                  onPointerMove={moveStroke}
+                  onPointerUp={endStroke}
+                  onPointerLeave={endStroke}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <FieldLabel htmlFor="pen-color" className="mb-0">
+                    Farbe
+                  </FieldLabel>
+                  <input
+                    id="pen-color"
+                    type="color"
+                    value={penColor}
+                    onChange={(event) => setPenColor(event.target.value)}
+                    className="h-9 w-12 cursor-pointer rounded border border-slate-300 dark:border-slate-600"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <FieldLabel htmlFor="pen-width" className="mb-0">
+                    Stärke ({penWidth} px)
+                  </FieldLabel>
+                  <input
+                    id="pen-width"
+                    type="range"
+                    min={1}
+                    max={8}
+                    value={penWidth}
+                    onChange={(event) => setPenWidth(Number(event.target.value))}
+                    className="accent-blue-700"
+                  />
+                </div>
+                <span className="flex-1" />
+                <Button variant="secondary" onClick={clearPad}>
+                  <Eraser aria-hidden className="mr-1.5 h-4 w-4" /> Leeren
                 </Button>
-                {signatures.length > 0 ? (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => void removeAll()}
-                    disabled={processing.state.active}
-                  >
-                    <Trash2 aria-hidden className="mr-1 h-3.5 w-3.5" /> Alle löschen
-                  </Button>
-                ) : null}
+                <Button onClick={saveDrawing}>Speichern</Button>
               </div>
             </div>
+          </TabsContent>
 
-            {signatures.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Noch keine Unterschrift gespeichert. Erstelle unten eine.
-              </p>
-            ) : (
-              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {signatures.map((signature) => (
-                  <li
-                    key={signature.id}
-                    className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"
-                  >
-                    <div className="flex h-24 items-center justify-center rounded-lg bg-white p-2 dark:bg-white">
-                      {previews[signature.id] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={previews[signature.id]}
-                          alt={`Vorschau ${signature.name}`}
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      ) : (
-                        <span className="text-xs text-red-600">Entschlüsselung fehlgeschlagen</span>
-                      )}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium">{signature.name}</p>
-                      <button
-                        type="button"
-                        aria-label={`${signature.name} löschen`}
-                        onClick={() => void removeOne(signature.id)}
-                        className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
-                      >
-                        <Trash2 aria-hidden className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      {signature.source === "draw"
-                        ? "Gezeichnet"
-                        : signature.source === "upload"
-                          ? "Hochgeladen"
-                          : "Aus Name"}{" "}
-                      · {new Date(signature.createdAt).toLocaleDateString("de-DE")}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <TabsContent value="hochladen">
+            <div className="space-y-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
+              <InfoAlert title="Automatische Transparenz">
+                Der weiße Hintergrund hochgeladener Bilder wird automatisch entfernt, damit die
+                Unterschrift sauber im Dokument liegt.
+              </InfoAlert>
+              <FileDropzone accept="images" onFiles={handleUpload} compact />
+            </div>
+          </TabsContent>
 
-          {/* Neue Unterschrift */}
-          <Tabs defaultValue="zeichnen">
-            <TabsList>
-              <TabsTrigger value="zeichnen">
-                <PenTool aria-hidden className="h-4 w-4" /> Zeichnen
-              </TabsTrigger>
-              <TabsTrigger value="hochladen">Bild hochladen</TabsTrigger>
-              <TabsTrigger value="name">Aus Name erzeugen</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="zeichnen">
-              <div className="space-y-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
-                <label htmlFor="sig-pad-label" className="block text-sm font-medium">
-                  Mit Maus, Finger oder Stift zeichnen:
-                </label>
-                <div id="sig-pad-label" className="sr-only">
-                  Zeichenfläche für Unterschrift
-                </div>
-                <div className="overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-white dark:border-slate-600">
-                  <canvas
-                    ref={padRef}
-                    width={900}
-                    height={300}
-                    role="img"
-                    aria-label="Zeichenfläche"
-                    className="block h-44 w-full cursor-crosshair touch-none sm:h-56"
-                    onPointerDown={startStroke}
-                    onPointerMove={moveStroke}
-                    onPointerUp={endStroke}
-                    onPointerLeave={endStroke}
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <FieldLabel htmlFor="pen-color" className="mb-0">
-                      Farbe
-                    </FieldLabel>
-                    <input
-                      id="pen-color"
-                      type="color"
-                      value={penColor}
-                      onChange={(event) => setPenColor(event.target.value)}
-                      className="h-9 w-12 cursor-pointer rounded border border-slate-300 dark:border-slate-600"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FieldLabel htmlFor="pen-width" className="mb-0">
-                      Stärke ({penWidth} px)
-                    </FieldLabel>
-                    <input
-                      id="pen-width"
-                      type="range"
-                      min={1}
-                      max={8}
-                      value={penWidth}
-                      onChange={(event) => setPenWidth(Number(event.target.value))}
-                      className="accent-blue-700"
-                    />
-                  </div>
-                  <span className="flex-1" />
-                  <Button variant="secondary" onClick={clearPad}>
-                    <Eraser aria-hidden className="mr-1.5 h-4 w-4" /> Leeren
-                  </Button>
-                  <Button onClick={saveDrawing}>Verschlüsselt speichern</Button>
-                </div>
+          <TabsContent value="name">
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
+              <div className="grow">
+                <FieldLabel htmlFor="sig-name">Dein Name</FieldLabel>
+                <Input
+                  id="sig-name"
+                  value={nameInput}
+                  onChange={(event) => setNameInput(event.target.value)}
+                  placeholder="z. B. Max Mustermann"
+                  maxLength={40}
+                />
               </div>
-            </TabsContent>
+              <Button onClick={saveNameSignature} disabled={!nameInput.trim()}>
+                In Schreibschrift erzeugen & speichern
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
 
-            <TabsContent value="hochladen">
-              <div className="space-y-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
-                <InfoAlert title="Automatische Transparenz">
-                  Der weiße Hintergrund hochgeladener Bilder wird automatisch entfernt, damit die
-                  Unterschrift sauber im Dokument liegt.
-                </InfoAlert>
-                <FileDropzone accept="images" onFiles={handleUpload} compact />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="name">
-              <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
-                <div className="grow">
-                  <FieldLabel htmlFor="sig-name">Dein Name</FieldLabel>
-                  <Input
-                    id="sig-name"
-                    value={nameInput}
-                    onChange={(event) => setNameInput(event.target.value)}
-                    placeholder="z. B. Max Mustermann"
-                    maxLength={40}
-                  />
-                </div>
-                <Button onClick={saveNameSignature} disabled={!nameInput.trim()}>
-                  In Schreibschrift erzeugen & speichern
-                </Button>
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <InfoAlert title="Nächster Schritt">
-            Öffne{" "}
-            <Link href="/tools/bearbeiten?tool=signatur" className="font-semibold underline">
-              „PDF bearbeiten“
-            </Link>
-            , wähle dort das Signatur-Werkzeug und platziere deine Unterschrift per Klick im
-            Dokument.
-          </InfoAlert>
-        </div>
-      )}
+        <InfoAlert title="Nächster Schritt">
+          Öffne{" "}
+          <Link href="/tools/bearbeiten?tool=signatur" className="font-semibold underline">
+            „PDF bearbeiten“
+          </Link>
+          , wähle dort das Signatur-Werkzeug und platziere deine Unterschrift per Klick im Dokument.
+        </InfoAlert>
+      </div>
 
       <ProcessingOverlay state={processing.state} onCancel={processing.cancel} />
     </ToolShell>

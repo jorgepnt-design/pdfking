@@ -31,7 +31,7 @@ Alle grün gekennzeichneten Werkzeuge verarbeiten Dokumente ausschließlich im B
 
 ### Verschlüsselung der Unterschriftenspeicherung
 
-Gespeicherte Unterschriften liegen AES-256-GCM-verschlüsselt in IndexedDB. Der Schlüssel wird per PBKDF2 (SHA-256, 250 000 Iterationen) aus einer Benutzter-Passphrase abgeleitet, die nie persistiert wird.
+Gespeicherte Unterschriften liegen AES-256-GCM-verschlüsselt in IndexedDB. Der lokale Speicher wird automatisch geöffnet, sodass zum Unterschreiben keine Passworteingabe erforderlich ist.
 
 ### Serververarbeitung (optional)
 

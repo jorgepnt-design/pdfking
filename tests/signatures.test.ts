@@ -6,11 +6,10 @@ import {
   lockSignatureStore,
 } from "../src/lib/signatures/session";
 import { fromBase64, toBase64 } from "../src/lib/signatures/encoding";
-import { AppError } from "../src/lib/types";
 
-describe("Signatur-Verschlüsselung (AES-GCM + PBKDF2)", () => {
+describe("Automatischer lokaler Signaturspeicher", () => {
   it("verschlüsselt und entschlüsselt rundum korrekt", async () => {
-    await unlockSignatureStore("richtige-passphrase");
+    await unlockSignatureStore();
     const plaintext = new TextEncoder().encode("vertrauliche-unterschrift").buffer as ArrayBuffer;
     const payload = await encryptForStorage(plaintext);
 
@@ -20,7 +19,7 @@ describe("Signatur-Verschlüsselung (AES-GCM + PBKDF2)", () => {
   });
 
   it("produziert unterschiedliche IVs für gleiche Daten", async () => {
-    await unlockSignatureStore("test");
+    await unlockSignatureStore();
     const data = new TextEncoder().encode("abc").buffer as ArrayBuffer;
     const first = await encryptForStorage(data);
     const second = await encryptForStorage(data);
@@ -28,23 +27,22 @@ describe("Signatur-Verschlüsselung (AES-GCM + PBKDF2)", () => {
     lockSignatureStore();
   });
 
-  it("lehnt falsche Passphrase ab", async () => {
-    await unlockSignatureStore("richtig");
+  it("öffnet sich nach einer Sperrung automatisch wieder", async () => {
+    await unlockSignatureStore();
     const payload = await encryptForStorage(
       new TextEncoder().encode("geheim").buffer as ArrayBuffer,
     );
     lockSignatureStore();
-
-    await unlockSignatureStore("falsch");
-    await expect(decryptFromStorage(payload)).rejects.toThrow(AppError);
+    const decrypted = await decryptFromStorage(payload);
+    expect(new TextDecoder().decode(decrypted)).toBe("geheim");
     lockSignatureStore();
   });
 
-  it("wirft ohne Entsperrung einen Fehler", async () => {
+  it("verschlüsselt ohne vorherige Passworteingabe", async () => {
     lockSignatureStore();
     await expect(
       encryptForStorage(new TextEncoder().encode("x").buffer as ArrayBuffer),
-    ).rejects.toThrow(AppError);
+    ).resolves.toMatchObject({ ivB64: expect.any(String) });
   });
 });
 
