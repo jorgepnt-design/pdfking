@@ -1,7 +1,7 @@
 ﻿import { PDFDocument, StandardFonts, rgb } from "@cantoo/pdf-lib";
 import JSZip from "jszip";
 import type { ISectionOptions } from "docx";
-import type { ImageExportFormat } from "../types";
+import { AppError, type ImageExportFormat } from "../types";
 import { SimpleCancellation, yieldToUi } from "../utils";
 import { saveDocument } from "./loadDocument";
 import { canvasToBytes, loadPdfJsDocument, renderPageToOffscreenCanvas } from "./pdfjs";
@@ -49,8 +49,27 @@ export async function imagesToPdf(
 
   for (let index = 0; index < files.length; index++) {
     const file = files[index];
-    const buffer = new Uint8Array(await file.arrayBuffer());
-    const isPng = file.type === "image/png" || /\.png$/i.test(file.name);
+    const isHeic =
+      /\.(heic|heif)$/i.test(file.name) ||
+      ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(
+        file.type.toLowerCase(),
+      );
+    let source: Blob = file;
+    if (isHeic) {
+      try {
+        const { default: heic2any } = await import("heic2any");
+        const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+        source = Array.isArray(converted) ? converted[0] : converted;
+      } catch {
+        throw new AppError(
+          "INVALID_TYPE",
+          `„${file.name}" konnte nicht als HEIC/HEIF-Bild gelesen werden.`,
+          "Prüfe, ob die Datei vollständig und unbeschädigt ist.",
+        );
+      }
+    }
+    const buffer = new Uint8Array(await source.arrayBuffer());
+    const isPng = !isHeic && (file.type === "image/png" || /\.png$/i.test(file.name));
     const image = isPng ? await doc.embedPng(buffer) : await doc.embedJpg(buffer);
     const page = doc.addPage([image.width, image.height]);
     page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });

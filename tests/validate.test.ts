@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isPdfBuffer, validatePdfFiles, MAX_UPLOAD_MB } from "../src/lib/validate";
+import {
+  isPdfBuffer,
+  validateImageFile,
+  validatePdfFiles,
+  MAX_UPLOAD_MB,
+} from "../src/lib/validate";
 
 function fakeFile(name: string, content: string | Uint8Array, type = "application/pdf"): File {
   const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
@@ -59,5 +64,17 @@ describe("validatePdfFiles", () => {
     const result = await validatePdfFiles([good, bad]);
     expect(result.accepted).toEqual([good]);
     expect(result.rejected).toHaveLength(1);
+  });
+});
+
+describe("validateImageFile", () => {
+  it("akzeptiert HEIC für die Bild-zu-PDF-Konvertierung", () => {
+    const heic = fakeFile("foto.heic", "heic-data", "image/heic");
+    expect(validateImageFile(heic, { allowHeic: true })).toBeNull();
+  });
+
+  it("lässt HEIC bei anderen Bildwerkzeugen weiterhin nicht zu", () => {
+    const heic = fakeFile("foto.heic", "heic-data", "image/heic");
+    expect(validateImageFile(heic)).not.toBeNull();
   });
 });

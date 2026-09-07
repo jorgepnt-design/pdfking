@@ -65,14 +65,16 @@ export async function validatePdfFiles(files: File[]): Promise<ValidationResult>
 }
 
 const IMAGE_TYPES = ["image/png", "image/jpeg"] as const;
+const HEIC_TYPES = ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"];
 
-export function validateImageFile(file: File): AppError | null {
+export function validateImageFile(file: File, options?: { allowHeic?: boolean }): AppError | null {
   const okType = (IMAGE_TYPES as readonly string[]).includes(file.type);
   const okExt = /\.(png|jpe?g)$/i.test(file.name);
-  if (!okType && !okExt) {
+  const isHeic = HEIC_TYPES.includes(file.type.toLowerCase()) || /\.(heic|heif)$/i.test(file.name);
+  if (!okType && !okExt && !(options?.allowHeic && isHeic)) {
     return new AppError(
       "INVALID_TYPE",
-      `„${file.name}" wird nicht unterstützt. Erlaubt sind PNG- und JPG-Bilder.`,
+      `„${file.name}" wird nicht unterstützt. Erlaubt sind PNG- und JPG-Bilder${options?.allowHeic ? " sowie HEIC- und HEIF-Dateien" : ""}.`,
     );
   }
   if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {

@@ -61,7 +61,7 @@ export default function KonvertierenPage() {
 
   const addImages = (files: File[]) => {
     for (const file of files) {
-      const problem = validateImageFile(file);
+      const problem = validateImageFile(file, { allowHeic: true });
       if (problem) {
         void processing.run("", async () => {
           throw problem;
@@ -290,7 +290,7 @@ export default function KonvertierenPage() {
                   ))}
                 </ol>
               ) : null}
-              <FileDropzone accept="images" multiple compact onFiles={addImages} />
+              <FileDropzone accept="convertibleImages" multiple compact onFiles={addImages} />
               {imageList.length > 0 ? (
                 <Button
                   variant="ghost"

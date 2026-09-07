@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 export interface FileDropzoneProps {
   onFiles: (files: File[]) => void;
-  accept?: "pdf" | "images" | "office";
+  accept?: "pdf" | "images" | "convertibleImages" | "office";
   multiple?: boolean;
   disabled?: boolean;
   compact?: boolean;
@@ -15,12 +15,14 @@ export interface FileDropzoneProps {
 const ACCEPT_MAP: Record<NonNullable<FileDropzoneProps["accept"]>, string> = {
   pdf: ".pdf,application/pdf",
   images: "image/png,image/jpeg,.png,.jpg,.jpeg",
+  convertibleImages: "image/png,image/jpeg,image/heic,image/heif,.png,.jpg,.jpeg,.heic,.heif",
   office: ".docx,.pptx,.xlsx",
 };
 
 const HINTS: Record<NonNullable<FileDropzoneProps["accept"]>, string> = {
   pdf: "PDF",
   images: "PNG, JPG",
+  convertibleImages: "PNG, JPG, HEIC, HEIF",
   office: "DOCX, PPTX, XLSX",
 };
 
@@ -49,7 +51,7 @@ export function FileDropzone({
     handleFiles(event.dataTransfer.files);
   };
 
-  const Icon = accept === "images" ? ImageIcon : FileUp;
+  const Icon = accept === "images" || accept === "convertibleImages" ? ImageIcon : FileUp;
 
   return (
     <div
