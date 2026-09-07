@@ -13,6 +13,7 @@ import {
   Plus,
   Redo2,
   RotateCw,
+  Signature,
   Square,
   Strikethrough,
   Trash2,
@@ -73,7 +74,7 @@ const TOOL_ITEMS: Array<{
   { id: "ink", label: "Freihand zeichnen", icon: PenLine },
   { id: "underline", label: "Unterstreichen", icon: Underline },
   { id: "strike", label: "Durchstreichen", icon: Strikethrough },
-  { id: "image", label: "Bild / Unterschrift einfügen", icon: ImagePlus },
+  { id: "image", label: "Unterschrift einfügen", icon: Signature },
 ];
 
 export default function BearbeitenPage() {
