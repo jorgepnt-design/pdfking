@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  CircleHelp,
   Eraser,
   Highlighter,
   ImagePlus,
@@ -135,6 +136,7 @@ function EditorInner() {
     null,
   );
   const [signDialogOpen, setSignDialogOpen] = useState(false);
+  const [toolHelpOpen, setToolHelpOpen] = useState(false);
   const [signatures, setSignatures] = useState<
     Array<{ id: string; name: string; dataUrl: string }>
   >([]);
@@ -718,6 +720,15 @@ function EditorInner() {
           aria-label="Werkzeuge"
           className="order-2 flex flex-row flex-wrap gap-1 rounded-xl border border-slate-200 p-2 lg:order-1 lg:flex-col dark:border-slate-800"
         >
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mb-1 w-full justify-start"
+            onClick={() => setToolHelpOpen(true)}
+          >
+            <CircleHelp className="h-4 w-4 shrink-0" />
+            Symbole erklären
+          </Button>
           {TOOL_ITEMS.map((item) => (
             <button
               key={item.id}
@@ -1079,6 +1090,46 @@ function EditorInner() {
           )}
         </aside>
       </div>
+
+      {/* Erklärung der Werkzeugsymbole */}
+      <Dialog open={toolHelpOpen} onOpenChange={setToolHelpOpen}>
+        <DialogContent
+          title="Bedeutung der Symbole"
+          description="Hier siehst du, welches Werkzeug sich hinter jedem Symbol verbirgt."
+        >
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {TOOL_ITEMS.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <item.icon className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-medium">{item.label}</span>
+              </li>
+            ))}
+            <li className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                <ImagePlus className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-medium">Eigenes Bild hochladen</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                <Undo2 className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-medium">Rückgängig</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                <Redo2 className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-medium">Wiederholen</span>
+            </li>
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       {/* Signatur-Auswahl */}
       <Dialog open={signDialogOpen} onOpenChange={setSignDialogOpen}>
