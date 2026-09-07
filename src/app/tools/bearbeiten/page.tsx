@@ -479,6 +479,7 @@ function EditorInner() {
           [pageIndex]: [...(current[pageIndex] ?? []), element],
         }));
         setSelectedId(element.id);
+        setTool("select");
         break;
       }
       case "image": {
