@@ -134,6 +134,7 @@ function EditorInner() {
   const overlayRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const documentViewportRef = useRef<HTMLDivElement>(null);
+  const pendingTextFocusRef = useRef<string | null>(null);
   const [documentViewportWidth, setDocumentViewportWidth] = useState(760);
   const dragRef = useRef<{
     mode: "create" | "move" | "resize" | "ink";
@@ -556,6 +557,7 @@ function EditorInner() {
         }));
         setSelectedId(element.id);
         setEditingTextId(element.id);
+        pendingTextFocusRef.current = element.id;
         setTool("select");
         break;
       }
@@ -705,6 +707,25 @@ function EditorInner() {
     const drag = dragRef.current;
     dragRef.current = null;
 
+    const focusTextEditor = (id: string) => {
+      setEditingTextId(id);
+      const focus = () => {
+        const editor = overlayRef.current?.querySelector<HTMLTextAreaElement>(
+          `[data-inline-text-editor="${id}"]`,
+        );
+        if (!editor) return false;
+        editor.focus();
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+        return true;
+      };
+      if (!focus()) window.requestAnimationFrame(focus);
+    };
+
+    if (pendingTextFocusRef.current) {
+      focusTextEditor(pendingTextFocusRef.current);
+      pendingTextFocusRef.current = null;
+    }
+
     if (drag?.mode === "create" && drag.startPoint) {
       const point = toPoint(event);
       if (!point || !draftRect || draftRect.width < 4) {
@@ -757,6 +778,12 @@ function EditorInner() {
     }
 
     if (drag?.mode === "move" || drag?.mode === "resize") {
+      if (drag.mode === "move" && drag.original?.kind === "text" && drag.startPoint) {
+        const point = toPoint(event);
+        if (point && Math.hypot(point.x - drag.startPoint.x, point.y - drag.startPoint.y) < 3) {
+          focusTextEditor(drag.original.id);
+        }
+      }
       forceRender((value) => value + 1);
       syncHistoryFlags();
     }
@@ -1446,16 +1473,6 @@ function ElementsLayer({
   onEditText: (id: string | null) => void;
   onTextChange: (id: string, text: string) => void;
 }) {
-  const inlineEditorRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (!editingTextId) return;
-    const editor = inlineEditorRef.current;
-    if (!editor) return;
-    editor.focus();
-    editor.setSelectionRange(editor.value.length, editor.value.length);
-  }, [editingTextId]);
-
   return (
     <>
       {elements.map((element) => {
@@ -1493,6 +1510,11 @@ function ElementsLayer({
                   event.stopPropagation();
                   onSelect(element.id);
                   onEditText(element.id);
+                  const editor = event.currentTarget.querySelector<HTMLTextAreaElement>(
+                    "[data-inline-text-editor]",
+                  );
+                  editor?.focus();
+                  editor?.setSelectionRange(editor.value.length, editor.value.length);
                 }}
                 style={{
                   left: element.x * scale,
@@ -1502,60 +1524,58 @@ function ElementsLayer({
                   cursor: "move",
                 }}
               >
-                {isEditing ? (
-                  <textarea
-                    ref={inlineEditorRef}
-                    data-inline-text-editor
-                    aria-label="Text direkt eingeben"
-                    value={element.text}
-                    onChange={(event) => onTextChange(element.id, event.target.value)}
-                    onBlur={() => onEditText(null)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        event.currentTarget.blur();
-                      }
-                    }}
-                    spellCheck={false}
-                    className="absolute inset-0 z-10 block resize-none overflow-hidden border-0 bg-transparent p-0 outline-none"
-                    style={{
-                      color: element.color,
-                      fontFamily: FONT_CSS[element.fontFamily],
-                      fontSize: element.fontSize * scale,
-                      fontWeight: element.bold ? 700 : 400,
-                      lineHeight: TEXT_LINE_HEIGHT_FACTOR,
-                      textAlign: element.align,
-                    }}
-                  />
-                ) : (
-                  <svg
-                    aria-hidden
-                    className="pointer-events-none block overflow-visible"
-                    width="100%"
-                    height="100%"
-                    viewBox={`0 0 ${element.width} ${contentHeight}`}
-                    preserveAspectRatio="none"
+                <svg
+                  aria-hidden
+                  className={`pointer-events-none block overflow-visible ${isEditing ? "invisible" : ""}`}
+                  width="100%"
+                  height="100%"
+                  viewBox={`0 0 ${element.width} ${contentHeight}`}
+                  preserveAspectRatio="none"
+                >
+                  <text
+                    x={textX}
+                    fill={element.color}
+                    fontFamily={FONT_CSS[element.fontFamily]}
+                    fontSize={element.fontSize}
+                    fontWeight={element.bold ? 700 : 400}
+                    textAnchor={textAnchor}
                   >
-                    <text
-                      x={textX}
-                      fill={element.color}
-                      fontFamily={FONT_CSS[element.fontFamily]}
-                      fontSize={element.fontSize}
-                      fontWeight={element.bold ? 700 : 400}
-                      textAnchor={textAnchor}
-                    >
-                      {lines.map((line, lineIndex) => (
-                        <tspan
-                          key={`${element.id}-${lineIndex}`}
-                          x={textX}
-                          y={textBaselineFromTop(element.fontSize, lineIndex)}
-                        >
-                          {line || " "}
-                        </tspan>
-                      ))}
-                    </text>
-                  </svg>
-                )}
+                    {lines.map((line, lineIndex) => (
+                      <tspan
+                        key={`${element.id}-${lineIndex}`}
+                        x={textX}
+                        y={textBaselineFromTop(element.fontSize, lineIndex)}
+                      >
+                        {line || " "}
+                      </tspan>
+                    ))}
+                  </text>
+                </svg>
+                <textarea
+                  data-inline-text-editor={element.id}
+                  aria-label="Text direkt eingeben"
+                  aria-hidden={!isEditing}
+                  tabIndex={isEditing ? 0 : -1}
+                  value={element.text}
+                  onChange={(event) => onTextChange(element.id, event.target.value)}
+                  onBlur={() => onEditText(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  spellCheck={false}
+                  className={`absolute inset-0 z-10 block resize-none overflow-hidden border-0 bg-transparent p-0 outline-none ${isEditing ? "" : "pointer-events-none opacity-0"}`}
+                  style={{
+                    color: element.color,
+                    fontFamily: FONT_CSS[element.fontFamily],
+                    fontSize: element.fontSize * scale,
+                    fontWeight: element.bold ? 700 : 400,
+                    lineHeight: TEXT_LINE_HEIGHT_FACTOR,
+                    textAlign: element.align,
+                  }}
+                />
                 {isSelected
                   ? (["w", "e"] as const).map((handle) => (
                       <span
