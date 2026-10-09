@@ -117,6 +117,7 @@ function EditorInner() {
   const [tool, setTool] = useState<EditorTool>("select");
   const [pages, setPages] = useState<PageElements>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [style, setStyle] = useState<EditorStyleDefaults>(DEFAULT_EDITOR_STYLE);
   const pagesRef = useRef<PageElements>({});
   const copiedTextRef = useRef<TextElement | null>(null);
@@ -242,6 +243,7 @@ function EditorInner() {
       setPageRotations({});
       setPages({});
       setSelectedId(null);
+      setEditingTextId(null);
       setExportedBytes(null);
       historyRef.current.reset();
       forceRender((value) => value + 1);
@@ -400,6 +402,7 @@ function EditorInner() {
     pagesRef.current = previous;
     setPages(previous);
     setSelectedId(null);
+    setEditingTextId(null);
     forceRender((value) => value + 1);
     syncHistoryFlags();
   }, [syncHistoryFlags]);
@@ -410,6 +413,7 @@ function EditorInner() {
     pagesRef.current = next;
     setPages(next);
     setSelectedId(null);
+    setEditingTextId(null);
     forceRender((value) => value + 1);
     syncHistoryFlags();
   }, [syncHistoryFlags]);
@@ -422,6 +426,7 @@ function EditorInner() {
       [pageIndex]: (current[pageIndex] ?? []).filter((element) => element.id !== selectedId),
     }));
     setSelectedId(null);
+    setEditingTextId(null);
   };
 
   const copySelectedText = useCallback(() => {
@@ -511,6 +516,7 @@ function EditorInner() {
 
     if (tool === "select") {
       const target = event.target as HTMLElement;
+      if (target.closest("[data-inline-text-editor]")) return;
       const targetId = target.closest("[data-elem]")?.getAttribute("data-elem");
       const resizeHandle = target
         .closest("[data-resize-handle]")
@@ -549,6 +555,7 @@ function EditorInner() {
           [pageIndex]: [...(current[pageIndex] ?? []), element],
         }));
         setSelectedId(element.id);
+        setEditingTextId(element.id);
         setTool("select");
         break;
       }
@@ -788,6 +795,22 @@ function EditorInner() {
     }));
   };
 
+  const updateTextContent = useCallback(
+    (id: string, text: string) => {
+      setPages((current) => {
+        const next = {
+          ...current,
+          [pageIndex]: (current[pageIndex] ?? []).map((element) =>
+            element.id === id && element.kind === "text" ? { ...element, text } : element,
+          ),
+        };
+        pagesRef.current = next;
+        return next;
+      });
+    },
+    [pageIndex],
+  );
+
   const pageElements = useMemo(() => pages[pageIndex] ?? [], [pages, pageIndex]);
   const selected = pageElements.find((element) => element.id === selectedId) ?? null;
   const { canUndo, canRedo } = historyFlags;
@@ -820,6 +843,7 @@ function EditorInner() {
     dragRef.current = null;
     setDraftRect(null);
     setSelectedId(null);
+    setEditingTextId(null);
     // Verhindert, dass Elemente der neuen Seite kurz mit den Maßen der alten Seite berechnet werden.
     setPageSize(null);
     setPageIndex(nextPageIndex);
@@ -998,7 +1022,10 @@ function EditorInner() {
                     elements={pageElements}
                     scale={displayWidth / pageSize.width}
                     selectedId={selectedId}
+                    editingTextId={editingTextId}
                     onSelect={selectElement}
+                    onEditText={setEditingTextId}
+                    onTextChange={updateTextContent}
                   />
                   {draftRect ? (
                     <div
@@ -1406,13 +1433,29 @@ function ElementsLayer({
   elements,
   scale,
   selectedId,
+  editingTextId,
   onSelect,
+  onEditText,
+  onTextChange,
 }: {
   elements: EditorElement[];
   scale: number;
   selectedId: string | null;
+  editingTextId: string | null;
   onSelect: (id: string) => void;
+  onEditText: (id: string | null) => void;
+  onTextChange: (id: string, text: string) => void;
 }) {
+  const inlineEditorRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!editingTextId) return;
+    const editor = inlineEditorRef.current;
+    if (!editor) return;
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+  }, [editingTextId]);
+
   return (
     <>
       {elements.map((element) => {
@@ -1426,6 +1469,7 @@ function ElementsLayer({
 
         switch (element.kind) {
           case "text": {
+            const isEditing = element.id === editingTextId;
             const lines = element.text.split("\n");
             const textX =
               element.align === "center"
@@ -1445,6 +1489,11 @@ function ElementsLayer({
                 key={element.id}
                 {...commonProps}
                 contentEditable={false}
+                onDoubleClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(element.id);
+                  onEditText(element.id);
+                }}
                 style={{
                   left: element.x * scale,
                   top: element.y * scale,
@@ -1453,33 +1502,60 @@ function ElementsLayer({
                   cursor: "move",
                 }}
               >
-                <svg
-                  aria-hidden
-                  className="pointer-events-none block overflow-visible"
-                  width="100%"
-                  height="100%"
-                  viewBox={`0 0 ${element.width} ${contentHeight}`}
-                  preserveAspectRatio="none"
-                >
-                  <text
-                    x={textX}
-                    fill={element.color}
-                    fontFamily={FONT_CSS[element.fontFamily]}
-                    fontSize={element.fontSize}
-                    fontWeight={element.bold ? 700 : 400}
-                    textAnchor={textAnchor}
+                {isEditing ? (
+                  <textarea
+                    ref={inlineEditorRef}
+                    data-inline-text-editor
+                    aria-label="Text direkt eingeben"
+                    value={element.text}
+                    onChange={(event) => onTextChange(element.id, event.target.value)}
+                    onBlur={() => onEditText(null)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    spellCheck={false}
+                    className="absolute inset-0 z-10 block resize-none overflow-hidden border-0 bg-transparent p-0 outline-none"
+                    style={{
+                      color: element.color,
+                      fontFamily: FONT_CSS[element.fontFamily],
+                      fontSize: element.fontSize * scale,
+                      fontWeight: element.bold ? 700 : 400,
+                      lineHeight: TEXT_LINE_HEIGHT_FACTOR,
+                      textAlign: element.align,
+                    }}
+                  />
+                ) : (
+                  <svg
+                    aria-hidden
+                    className="pointer-events-none block overflow-visible"
+                    width="100%"
+                    height="100%"
+                    viewBox={`0 0 ${element.width} ${contentHeight}`}
+                    preserveAspectRatio="none"
                   >
-                    {lines.map((line, lineIndex) => (
-                      <tspan
-                        key={`${element.id}-${lineIndex}`}
-                        x={textX}
-                        y={textBaselineFromTop(element.fontSize, lineIndex)}
-                      >
-                        {line || " "}
-                      </tspan>
-                    ))}
-                  </text>
-                </svg>
+                    <text
+                      x={textX}
+                      fill={element.color}
+                      fontFamily={FONT_CSS[element.fontFamily]}
+                      fontSize={element.fontSize}
+                      fontWeight={element.bold ? 700 : 400}
+                      textAnchor={textAnchor}
+                    >
+                      {lines.map((line, lineIndex) => (
+                        <tspan
+                          key={`${element.id}-${lineIndex}`}
+                          x={textX}
+                          y={textBaselineFromTop(element.fontSize, lineIndex)}
+                        >
+                          {line || " "}
+                        </tspan>
+                      ))}
+                    </text>
+                  </svg>
+                )}
                 {isSelected
                   ? (["w", "e"] as const).map((handle) => (
                       <span

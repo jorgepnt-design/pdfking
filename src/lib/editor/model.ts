@@ -98,7 +98,7 @@ export function createTextElement(
     y,
     width: 240,
     height: style.fontSize * 1.5,
-    text: "Neuer Text",
+    text: "",
     fontFamily: style.fontFamily,
     bold: style.bold,
     fontSize: style.fontSize,

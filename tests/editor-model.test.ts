@@ -76,6 +76,7 @@ describe("Element-Fabriken", () => {
     const second = createTextElement(0, 10, 10, DEFAULT_EDITOR_STYLE);
     expect(first.id).not.toBe(second.id);
     expect(first.kind).toBe("text");
+    expect(first.text).toBe("");
   });
 
   it("kopiert ein Textfeld mit Format und versetzter Position", () => {
