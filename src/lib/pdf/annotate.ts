@@ -46,6 +46,17 @@ const FONT_OF_FAMILY: Record<FontFamily, "Helvetica" | "TimesRoman" | "Courier">
   Courier: "Courier",
 };
 
+export function editorPointToPdf(
+  pageBox: { x: number; y: number; height: number },
+  x: number,
+  yFromTop: number,
+): { x: number; y: number } {
+  return {
+    x: pageBox.x + x,
+    y: pageBox.y + pageBox.height - yFromTop,
+  };
+}
+
 /**
  * Brennt Bearbeitungselemente dauerhaft in das PDF.
  * Koordinatenkonvention: y misst von oben (wird hier in PDF-Koordinaten umgerechnet).
@@ -100,7 +111,12 @@ export async function flattenEditorElements(
   for (const pageIndex of pageIndices) {
     const page = allPages[pageIndex];
     if (!page) continue;
-    const { height: pageHeight } = page.getSize();
+    // PDF.js zeigt die CropBox an. Deshalb müssen Editor-Koordinaten beim Export
+    // ebenfalls auf diese sichtbare Box bezogen werden. Bei PDFs mit versetzter
+    // CropBox würden Elemente sonst um deren Randabstand verschoben ausgegeben.
+    const pageBox = page.getCropBox();
+    const pdfX = (x: number) => editorPointToPdf(pageBox, x, 0).x;
+    const pdfY = (yFromTop: number) => editorPointToPdf(pageBox, 0, yFromTop).y;
 
     for (const element of pages[pageIndex]) {
       switch (element.kind) {
@@ -115,9 +131,9 @@ export async function flattenEditorElements(
             let x = element.x;
             if (element.align === "center") x = element.x + (element.width - textWidth) / 2;
             if (element.align === "right") x = element.x + element.width - textWidth;
-            const baselineY = pageHeight - element.y - element.fontSize - lineIndex * lineHeight;
+            const baselineY = pdfY(element.y + element.fontSize + lineIndex * lineHeight);
             page.drawText(line, {
-              x,
+              x: pdfX(x),
               y: baselineY,
               size: element.fontSize,
               font,
@@ -136,8 +152,8 @@ export async function flattenEditorElements(
             imageCache.set(element.dataUrl, embedded);
           }
           page.drawImage(embedded, {
-            x: element.x,
-            y: pageHeight - element.y - element.height,
+            x: pdfX(element.x),
+            y: pdfY(element.y + element.height),
             width: element.width,
             height: element.height,
           });
@@ -147,8 +163,8 @@ export async function flattenEditorElements(
           const fill = element.fillColor ? hexToRgb(element.fillColor) : null;
           const stroke = hexToRgb(element.strokeColor);
           page.drawRectangle({
-            x: element.x,
-            y: pageHeight - element.y - element.height,
+            x: pdfX(element.x),
+            y: pdfY(element.y + element.height),
             width: element.width,
             height: element.height,
             color: fill ? rgb(fill.r, fill.g, fill.b) : undefined,
@@ -162,8 +178,8 @@ export async function flattenEditorElements(
         case "highlight": {
           const color = hexToRgb(element.color);
           page.drawRectangle({
-            x: element.x,
-            y: pageHeight - element.y - element.height,
+            x: pdfX(element.x),
+            y: pdfY(element.y + element.height),
             width: element.width,
             height: element.height,
             color: rgb(color.r, color.g, color.b),
@@ -173,8 +189,8 @@ export async function flattenEditorElements(
         }
         case "eraser": {
           page.drawRectangle({
-            x: element.x,
-            y: pageHeight - element.y - element.height,
+            x: pdfX(element.x),
+            y: pdfY(element.y + element.height),
             width: element.width,
             height: element.height,
             color: rgb(1, 1, 1),
@@ -187,8 +203,8 @@ export async function flattenEditorElements(
           const color = hexToRgb(element.color);
           const offset = element.kind === "strike" ? element.height : 0;
           page.drawRectangle({
-            x: element.x,
-            y: pageHeight - element.y - offset - element.height,
+            x: pdfX(element.x),
+            y: pdfY(element.y + offset + element.height),
             width: element.width,
             height: element.height,
             color: rgb(color.r, color.g, color.b),
@@ -199,8 +215,8 @@ export async function flattenEditorElements(
         case "line": {
           const color = hexToRgb(element.color);
           page.drawLine({
-            start: { x: element.x, y: pageHeight - element.y },
-            end: { x: element.x2, y: pageHeight - element.y2 },
+            start: { x: pdfX(element.x), y: pdfY(element.y) },
+            end: { x: pdfX(element.x2), y: pdfY(element.y2) },
             thickness: element.strokeWidth,
             color: rgb(color.r, color.g, color.b),
             lineCap: LineCapStyle.Round,
@@ -210,10 +226,10 @@ export async function flattenEditorElements(
             const headLength = Math.max(10, element.strokeWidth * 4);
             for (const spread of [Math.PI / 7, -Math.PI / 7]) {
               page.drawLine({
-                start: { x: element.x2, y: pageHeight - element.y2 },
+                start: { x: pdfX(element.x2), y: pdfY(element.y2) },
                 end: {
-                  x: element.x2 + headLength * Math.cos(angle + spread),
-                  y: pageHeight - element.y2 + headLength * Math.sin(angle + spread),
+                  x: pdfX(element.x2 + headLength * Math.cos(angle + spread)),
+                  y: pdfY(element.y2 - headLength * Math.sin(angle + spread)),
                 },
                 thickness: element.strokeWidth,
                 color: rgb(color.r, color.g, color.b),
@@ -229,8 +245,8 @@ export async function flattenEditorElements(
             const from = element.points[index - 1];
             const to = element.points[index];
             page.drawLine({
-              start: { x: from.x, y: pageHeight - from.y },
-              end: { x: to.x, y: pageHeight - to.y },
+              start: { x: pdfX(from.x), y: pdfY(from.y) },
+              end: { x: pdfX(to.x), y: pdfY(to.y) },
               thickness: element.strokeWidth,
               color: rgb(color.r, color.g, color.b),
               lineCap: LineCapStyle.Round,

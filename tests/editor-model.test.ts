@@ -3,6 +3,7 @@ import {
   HistoryStore,
   createImageElement,
   createTextElement,
+  duplicateTextElement,
   moveElement,
   resizeImageElement,
   resizeTextElement,
@@ -69,6 +70,23 @@ describe("Element-Fabriken", () => {
     const second = createTextElement(0, 10, 10, DEFAULT_EDITOR_STYLE);
     expect(first.id).not.toBe(second.id);
     expect(first.kind).toBe("text");
+  });
+
+  it("kopiert ein Textfeld mit Format und versetzter Position", () => {
+    const original = {
+      ...createTextElement(0, 100, 80, { ...DEFAULT_EDITOR_STYLE, fontSize: 20 }),
+      text: "Klaus Stark",
+      bold: true,
+    };
+    const copy = duplicateTextElement(original, 1, 600, 800);
+
+    expect(copy.id).not.toBe(original.id);
+    expect(copy.pageIndex).toBe(1);
+    expect(copy.x).toBe(112);
+    expect(copy.y).toBe(92);
+    expect(copy.text).toBe("Klaus Stark");
+    expect(copy.fontSize).toBe(20);
+    expect(copy.bold).toBe(true);
   });
 
   it("moveElement verschiebt Linien-Endpunkte mit", () => {

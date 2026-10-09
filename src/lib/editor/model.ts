@@ -100,6 +100,22 @@ export function createTextElement(
   };
 }
 
+export function duplicateTextElement(
+  element: TextElement,
+  pageIndex: number,
+  pageWidth: number,
+  pageHeight: number,
+  offset = 12,
+): TextElement {
+  return {
+    ...element,
+    id: uid(),
+    pageIndex,
+    x: Math.max(0, Math.min(element.x + offset, pageWidth - element.width)),
+    y: Math.max(0, Math.min(element.y + offset, pageHeight - element.height)),
+  };
+}
+
 export function createRectElement(
   pageIndex: number,
   x: number,

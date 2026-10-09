@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CircleHelp,
+  ClipboardPaste,
+  Copy,
   Eraser,
   Highlighter,
   ImagePlus,
@@ -43,6 +45,7 @@ import {
   createLineElement,
   createRectElement,
   createTextElement,
+  duplicateTextElement,
   DEFAULT_EDITOR_STYLE,
   HistoryStore,
   moveElement,
@@ -58,7 +61,14 @@ import { loadPdfJsDocument, renderPageToCanvas } from "@/lib/pdf/pdfjs";
 import { decryptFromStorage } from "@/lib/signatures/session";
 import { arrayBufferToDataUrl } from "@/lib/signatures/encoding";
 import { listSignatures, loadSignaturePayload } from "@/lib/signatures/store";
-import type { EditorElement, EditorTool, FontFamily, PageElements, TextAlign } from "@/lib/types";
+import type {
+  EditorElement,
+  EditorTool,
+  FontFamily,
+  PageElements,
+  TextAlign,
+  TextElement,
+} from "@/lib/types";
 import { validateImageFile, validatePdfFiles } from "@/lib/validate";
 
 const TOOL_ITEMS: Array<{
@@ -106,6 +116,9 @@ function EditorInner() {
   const [pages, setPages] = useState<PageElements>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [style, setStyle] = useState<EditorStyleDefaults>(DEFAULT_EDITOR_STYLE);
+  const pagesRef = useRef<PageElements>({});
+  const copiedTextRef = useRef<TextElement | null>(null);
+  const [hasCopiedText, setHasCopiedText] = useState(false);
   const historyRef = useRef(new HistoryStore<PageElements>());
   const [historyFlags, setHistoryFlags] = useState({ canUndo: false, canRedo: false });
   const [, forceRender] = useState(0);
@@ -345,7 +358,6 @@ function EditorInner() {
   };
 
   // ---------- Historie ----------
-  const pagesRef = useRef<PageElements>({});
   useEffect(() => {
     pagesRef.current = pages;
   }, [pages]);
@@ -361,6 +373,23 @@ function EditorInner() {
       syncHistoryFlags();
     },
     [syncHistoryFlags],
+  );
+
+  const selectElement = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      const element = (pagesRef.current[pageIndex] ?? []).find((candidate) => candidate.id === id);
+      if (element?.kind !== "text") return;
+      setStyle((current) => ({
+        ...current,
+        fontFamily: element.fontFamily,
+        bold: element.bold,
+        fontSize: element.fontSize,
+        color: element.color,
+        align: element.align,
+      }));
+    },
+    [pageIndex],
   );
 
   const undo = useCallback(() => {
@@ -393,6 +422,37 @@ function EditorInner() {
     setSelectedId(null);
   };
 
+  const copySelectedText = useCallback(() => {
+    if (!selectedId) return;
+    const element = (pagesRef.current[pageIndex] ?? []).find(
+      (candidate): candidate is TextElement =>
+        candidate.id === selectedId && candidate.kind === "text",
+    );
+    if (!element) return;
+    copiedTextRef.current = structuredClone(element);
+    setHasCopiedText(true);
+  }, [pageIndex, selectedId]);
+
+  const pasteCopiedText = useCallback(() => {
+    const copied = copiedTextRef.current;
+    if (!copied || !pageSize) return;
+    const element = duplicateTextElement(copied, pageIndex, pageSize.width, pageSize.height);
+    commit((current) => ({
+      ...current,
+      [pageIndex]: [...(current[pageIndex] ?? []), element],
+    }));
+    setSelectedId(element.id);
+    setTool("select");
+    setStyle((current) => ({
+      ...current,
+      fontFamily: element.fontFamily,
+      bold: element.bold,
+      fontSize: element.fontSize,
+      color: element.color,
+      align: element.align,
+    }));
+  }, [commit, pageIndex, pageSize]);
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -407,6 +467,14 @@ function EditorInner() {
         event.preventDefault();
         redo();
       }
+      if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        copySelectedText();
+      }
+      if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+        event.preventDefault();
+        pasteCopiedText();
+      }
       if (!typing && (event.key === "Delete" || event.key === "Backspace") && selectedId) {
         event.preventDefault();
         deleteSelected();
@@ -419,7 +487,7 @@ function EditorInner() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [copySelectedText, pasteCopiedText, redo, selectedId, undo]);
 
   // ---------- Zeigerinteraktion ----------
   const toPoint = (event: React.PointerEvent): { x: number; y: number } | null => {
@@ -448,7 +516,7 @@ function EditorInner() {
       if (targetId) {
         const element = (pages[pageIndex] ?? []).find((candidate) => candidate.id === targetId);
         if (element) {
-          setSelectedId(targetId);
+          selectElement(targetId);
           historyRef.current.push(pages);
           dragRef.current = {
             mode:
@@ -698,11 +766,23 @@ function EditorInner() {
     patch: Partial<Extract<EditorElement, { kind: "text" }>> & Record<string, unknown>,
   ) => {
     if (!selectedId) return;
-    setPages((current) => ({
+    setPages((current) => {
+      const next = {
+        ...current,
+        [pageIndex]: (current[pageIndex] ?? []).map((element) =>
+          element.id === selectedId ? ({ ...element, ...patch } as EditorElement) : element,
+        ),
+      };
+      pagesRef.current = next;
+      return next;
+    });
+    setStyle((current) => ({
       ...current,
-      [pageIndex]: (current[pageIndex] ?? []).map((element) =>
-        element.id === selectedId ? ({ ...element, ...patch } as EditorElement) : element,
-      ),
+      ...(typeof patch.fontFamily === "string" ? { fontFamily: patch.fontFamily } : {}),
+      ...(typeof patch.bold === "boolean" ? { bold: patch.bold } : {}),
+      ...(typeof patch.fontSize === "number" ? { fontSize: patch.fontSize } : {}),
+      ...(typeof patch.color === "string" ? { color: patch.color } : {}),
+      ...(typeof patch.align === "string" ? { align: patch.align } : {}),
     }));
   };
 
@@ -916,7 +996,7 @@ function EditorInner() {
                     elements={pageElements}
                     scale={displayWidth / pageSize.width}
                     selectedId={selectedId}
-                    onSelect={setSelectedId}
+                    onSelect={selectElement}
                   />
                   {draftRect ? (
                     <div
@@ -965,6 +1045,19 @@ function EditorInner() {
                 Ziehe den blauen Griff links oder rechts am Textfeld. So kannst du den Text auf eine
                 Zeile verbreitern, ohne die Schriftgröße zu verändern.
               </InfoAlert>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="secondary" size="sm" onClick={copySelectedText}>
+                  <Copy className="mr-1.5 h-4 w-4" /> Kopieren
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={pasteCopiedText}
+                  disabled={!hasCopiedText}
+                >
+                  <ClipboardPaste className="mr-1.5 h-4 w-4" /> Einfügen
+                </Button>
+              </div>
               <div>
                 <FieldLabel htmlFor="prop-text">Inhalt</FieldLabel>
                 <textarea
@@ -1101,6 +1194,12 @@ function EditorInner() {
               />
             </div>
           )}
+
+          {hasCopiedText && selected?.kind !== "text" ? (
+            <Button variant="secondary" className="w-full" onClick={pasteCopiedText}>
+              <ClipboardPaste className="mr-1.5 h-4 w-4" /> Textfeld einfügen
+            </Button>
+          ) : null}
 
           {selected ? (
             <Button variant="destructive" className="w-full" onClick={deleteSelected}>
