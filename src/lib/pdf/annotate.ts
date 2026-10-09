@@ -1,6 +1,7 @@
 import { degrees, LineCapStyle, PDFDocument, rgb, StandardFonts } from "@cantoo/pdf-lib";
 import type { FontFamily, PageElements } from "../types";
 import { hexToRgb } from "../utils";
+import { textBaselineFromTop } from "../editor/model";
 import { loadPdfDocument, saveDocument } from "./loadDocument";
 
 type EmbeddedFonts = Record<
@@ -123,7 +124,6 @@ export async function flattenEditorElements(
         case "text": {
           const family = FONT_OF_FAMILY[element.fontFamily];
           const font = element.bold ? fonts[family].bold : fonts[family].regular;
-          const lineHeight = element.fontSize * 1.25;
           const lines = element.text.split("\n");
           lines.forEach((line, lineIndex) => {
             if (!line) return;
@@ -131,7 +131,7 @@ export async function flattenEditorElements(
             let x = element.x;
             if (element.align === "center") x = element.x + (element.width - textWidth) / 2;
             if (element.align === "right") x = element.x + element.width - textWidth;
-            const baselineY = pdfY(element.y + element.fontSize + lineIndex * lineHeight);
+            const baselineY = pdfY(element.y + textBaselineFromTop(element.fontSize, lineIndex));
             page.drawText(line, {
               x: pdfX(x),
               y: baselineY,

@@ -51,6 +51,8 @@ import {
   moveElement,
   resizeImageElement,
   resizeTextElement,
+  textBaselineFromTop,
+  TEXT_LINE_HEIGHT_FACTOR,
   type ImageResizeHandle,
   type TextResizeHandle,
   type EditorStyleDefaults,
@@ -1425,7 +1427,21 @@ function ElementsLayer({
         };
 
         switch (element.kind) {
-          case "text":
+          case "text": {
+            const lines = element.text.split("\n");
+            const textX =
+              element.align === "center"
+                ? element.width / 2
+                : element.align === "right"
+                  ? element.width
+                  : 0;
+            const textAnchor =
+              element.align === "center" ? "middle" : element.align === "right" ? "end" : "start";
+            const contentHeight = Math.max(
+              element.height,
+              element.fontSize +
+                Math.max(0, lines.length - 1) * element.fontSize * TEXT_LINE_HEIGHT_FACTOR,
+            );
             return (
               <div
                 key={element.id}
@@ -1435,19 +1451,37 @@ function ElementsLayer({
                   left: element.x * scale,
                   top: element.y * scale,
                   width: element.width * scale,
-                  minHeight: element.height * scale,
-                  fontSize: element.fontSize * scale,
-                  lineHeight: 1.25,
-                  fontFamily: FONT_CSS[element.fontFamily],
-                  fontWeight: element.bold ? 700 : 400,
-                  color: element.color,
-                  textAlign: element.align,
-                  whiteSpace: "pre-wrap",
+                  height: contentHeight * scale,
                   cursor: "move",
-                  padding: 0,
                 }}
               >
-                {element.text}
+                <svg
+                  aria-hidden
+                  className="pointer-events-none block overflow-visible"
+                  width="100%"
+                  height="100%"
+                  viewBox={`0 0 ${element.width} ${contentHeight}`}
+                  preserveAspectRatio="none"
+                >
+                  <text
+                    x={textX}
+                    fill={element.color}
+                    fontFamily={FONT_CSS[element.fontFamily]}
+                    fontSize={element.fontSize}
+                    fontWeight={element.bold ? 700 : 400}
+                    textAnchor={textAnchor}
+                  >
+                    {lines.map((line, lineIndex) => (
+                      <tspan
+                        key={`${element.id}-${lineIndex}`}
+                        x={textX}
+                        y={textBaselineFromTop(element.fontSize, lineIndex)}
+                      >
+                        {line || " "}
+                      </tspan>
+                    ))}
+                  </text>
+                </svg>
                 {isSelected
                   ? (["w", "e"] as const).map((handle) => (
                       <span
@@ -1462,6 +1496,7 @@ function ElementsLayer({
                   : null}
               </div>
             );
+          }
           case "image":
             return (
               <div

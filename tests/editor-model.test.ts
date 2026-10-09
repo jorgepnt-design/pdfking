@@ -7,6 +7,7 @@ import {
   moveElement,
   resizeImageElement,
   resizeTextElement,
+  textBaselineFromTop,
 } from "../src/lib/editor/model";
 import { DEFAULT_EDITOR_STYLE } from "../src/lib/editor/model";
 
@@ -65,6 +66,11 @@ describe("HistoryStore", () => {
 });
 
 describe("Element-Fabriken", () => {
+  it("verwendet eine feste, gemeinsame Textgrundlinie", () => {
+    expect(textBaselineFromTop(20, 0)).toBe(20);
+    expect(textBaselineFromTop(20, 1)).toBe(45);
+  });
+
   it("erzeugt eindeutige IDs", () => {
     const first = createTextElement(0, 10, 10, DEFAULT_EDITOR_STYLE);
     const second = createTextElement(0, 10, 10, DEFAULT_EDITOR_STYLE);

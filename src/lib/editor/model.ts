@@ -30,6 +30,13 @@ export const DEFAULT_EDITOR_STYLE: EditorStyleDefaults = {
   strokeWidth: 2,
 };
 
+export const TEXT_LINE_HEIGHT_FACTOR = 1.25;
+
+/** Gemeinsame Textgrundlinie für Browser-Vorschau und PDF-Export. */
+export function textBaselineFromTop(fontSize: number, lineIndex: number): number {
+  return fontSize + lineIndex * fontSize * TEXT_LINE_HEIGHT_FACTOR;
+}
+
 /**
  * Undo/Redo-Historie mit fester Kapazität.
  * Speichert vollständige Snapshots; `push` beginnt einen neuen Zweig
