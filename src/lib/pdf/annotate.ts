@@ -48,14 +48,32 @@ const FONT_OF_FAMILY: Record<FontFamily, "Helvetica" | "TimesRoman" | "Courier">
 };
 
 export function editorPointToPdf(
-  pageBox: { x: number; y: number; height: number },
+  pageBox: { x: number; y: number; width: number; height: number },
   x: number,
   yFromTop: number,
+  rotation: 0 | 90 | 180 | 270 = 0,
 ): { x: number; y: number } {
-  return {
-    x: pageBox.x + x,
-    y: pageBox.y + pageBox.height - yFromTop,
-  };
+  switch (rotation) {
+    case 90:
+      return { x: pageBox.x + yFromTop, y: pageBox.y + x };
+    case 180:
+      return { x: pageBox.x + pageBox.width - x, y: pageBox.y + yFromTop };
+    case 270:
+      return {
+        x: pageBox.x + pageBox.width - yFromTop,
+        y: pageBox.y + pageBox.height - x,
+      };
+    default:
+      return {
+        x: pageBox.x + x,
+        y: pageBox.y + pageBox.height - yFromTop,
+      };
+  }
+}
+
+function normalizedRotation(angle: number): 0 | 90 | 180 | 270 {
+  const normalized = ((angle % 360) + 360) % 360;
+  return normalized === 90 || normalized === 180 || normalized === 270 ? normalized : 0;
 }
 
 /**
@@ -76,32 +94,11 @@ export async function flattenEditorElements(
     .filter((index) => pageRotations[index] === 180);
   if (pageIndices.length === 0 && rotatedPageIndices.length === 0) return pdfBytes;
 
-  const sourceDoc = await loadPdfDocument(pdfBytes);
-  let doc = sourceDoc;
-
-  if (rotatedPageIndices.length > 0) {
-    const normalizedDoc = await PDFDocument.create();
-    const rotated = new Set(rotatedPageIndices);
-    const sourcePages = sourceDoc.getPages();
-    for (let index = 0; index < sourcePages.length; index++) {
-      const sourcePage = sourcePages[index];
-      if (!rotated.has(index)) {
-        const [copiedPage] = await normalizedDoc.copyPages(sourceDoc, [index]);
-        normalizedDoc.addPage(copiedPage);
-        continue;
-      }
-      const { width, height } = sourcePage.getSize();
-      const embeddedPage = await normalizedDoc.embedPage(sourcePage);
-      const page = normalizedDoc.addPage([width, height]);
-      page.drawPage(embeddedPage, {
-        x: width,
-        y: height,
-        width,
-        height,
-        rotate: degrees(180),
-      });
-    }
-    doc = normalizedDoc;
+  const doc = await loadPdfDocument(pdfBytes);
+  for (const pageIndex of rotatedPageIndices) {
+    const page = doc.getPage(pageIndex);
+    const currentRotation = normalizedRotation(page.getRotation().angle);
+    page.setRotation(degrees((currentRotation + 180) % 360));
   }
   const fonts = await embedAllFonts(doc);
   const imageCache = new Map<string, Awaited<ReturnType<PDFDocument["embedPng"]>>>();
@@ -116,8 +113,8 @@ export async function flattenEditorElements(
     // ebenfalls auf diese sichtbare Box bezogen werden. Bei PDFs mit versetzter
     // CropBox würden Elemente sonst um deren Randabstand verschoben ausgegeben.
     const pageBox = page.getCropBox();
-    const pdfX = (x: number) => editorPointToPdf(pageBox, x, 0).x;
-    const pdfY = (yFromTop: number) => editorPointToPdf(pageBox, 0, yFromTop).y;
+    const rotation = normalizedRotation(page.getRotation().angle);
+    const pdfPoint = (x: number, y: number) => editorPointToPdf(pageBox, x, y, rotation);
 
     for (const element of pages[pageIndex]) {
       switch (element.kind) {
@@ -131,13 +128,16 @@ export async function flattenEditorElements(
             let x = element.x;
             if (element.align === "center") x = element.x + (element.width - textWidth) / 2;
             if (element.align === "right") x = element.x + element.width - textWidth;
-            const baselineY = pdfY(element.y + textBaselineFromTop(element.fontSize, lineIndex));
+            const baseline = pdfPoint(
+              x,
+              element.y + textBaselineFromTop(element.fontSize, lineIndex),
+            );
             page.drawText(line, {
-              x: pdfX(x),
-              y: baselineY,
+              ...baseline,
               size: element.fontSize,
               font,
               color: rgb(...(Object.values(hexToRgb(element.color)) as [number, number, number])),
+              rotate: degrees(rotation),
             });
           });
           break;
@@ -151,20 +151,21 @@ export async function flattenEditorElements(
               : await doc.embedJpg(bytes);
             imageCache.set(element.dataUrl, embedded);
           }
+          const origin = pdfPoint(element.x, element.y + element.height);
           page.drawImage(embedded, {
-            x: pdfX(element.x),
-            y: pdfY(element.y + element.height),
+            ...origin,
             width: element.width,
             height: element.height,
+            rotate: degrees(rotation),
           });
           break;
         }
         case "rect": {
           const fill = element.fillColor ? hexToRgb(element.fillColor) : null;
           const stroke = hexToRgb(element.strokeColor);
+          const origin = pdfPoint(element.x, element.y + element.height);
           page.drawRectangle({
-            x: pdfX(element.x),
-            y: pdfY(element.y + element.height),
+            ...origin,
             width: element.width,
             height: element.height,
             color: fill ? rgb(fill.r, fill.g, fill.b) : undefined,
@@ -172,29 +173,32 @@ export async function flattenEditorElements(
             borderWidth: element.strokeWidth,
             opacity: element.fillColor ? element.opacity : 0,
             borderOpacity: element.opacity,
+            rotate: degrees(rotation),
           });
           break;
         }
         case "highlight": {
           const color = hexToRgb(element.color);
+          const origin = pdfPoint(element.x, element.y + element.height);
           page.drawRectangle({
-            x: pdfX(element.x),
-            y: pdfY(element.y + element.height),
+            ...origin,
             width: element.width,
             height: element.height,
             color: rgb(color.r, color.g, color.b),
             opacity: 0.35,
+            rotate: degrees(rotation),
           });
           break;
         }
         case "eraser": {
+          const origin = pdfPoint(element.x, element.y + element.height);
           page.drawRectangle({
-            x: pdfX(element.x),
-            y: pdfY(element.y + element.height),
+            ...origin,
             width: element.width,
             height: element.height,
             color: rgb(1, 1, 1),
             opacity: 1,
+            rotate: degrees(rotation),
           });
           break;
         }
@@ -202,21 +206,24 @@ export async function flattenEditorElements(
         case "strike": {
           const color = hexToRgb(element.color);
           const offset = element.kind === "strike" ? element.height : 0;
+          const origin = pdfPoint(element.x, element.y + offset + element.height);
           page.drawRectangle({
-            x: pdfX(element.x),
-            y: pdfY(element.y + offset + element.height),
+            ...origin,
             width: element.width,
             height: element.height,
             color: rgb(color.r, color.g, color.b),
             opacity: 0.9,
+            rotate: degrees(rotation),
           });
           break;
         }
         case "line": {
           const color = hexToRgb(element.color);
+          const start = pdfPoint(element.x, element.y);
+          const end = pdfPoint(element.x2, element.y2);
           page.drawLine({
-            start: { x: pdfX(element.x), y: pdfY(element.y) },
-            end: { x: pdfX(element.x2), y: pdfY(element.y2) },
+            start,
+            end,
             thickness: element.strokeWidth,
             color: rgb(color.r, color.g, color.b),
             lineCap: LineCapStyle.Round,
@@ -226,11 +233,11 @@ export async function flattenEditorElements(
             const headLength = Math.max(10, element.strokeWidth * 4);
             for (const spread of [Math.PI / 7, -Math.PI / 7]) {
               page.drawLine({
-                start: { x: pdfX(element.x2), y: pdfY(element.y2) },
-                end: {
-                  x: pdfX(element.x2 + headLength * Math.cos(angle + spread)),
-                  y: pdfY(element.y2 - headLength * Math.sin(angle + spread)),
-                },
+                start: end,
+                end: pdfPoint(
+                  element.x2 + headLength * Math.cos(angle + spread),
+                  element.y2 - headLength * Math.sin(angle + spread),
+                ),
                 thickness: element.strokeWidth,
                 color: rgb(color.r, color.g, color.b),
                 lineCap: LineCapStyle.Round,
@@ -245,8 +252,8 @@ export async function flattenEditorElements(
             const from = element.points[index - 1];
             const to = element.points[index];
             page.drawLine({
-              start: { x: pdfX(from.x), y: pdfY(from.y) },
-              end: { x: pdfX(to.x), y: pdfY(to.y) },
+              start: pdfPoint(from.x, from.y),
+              end: pdfPoint(to.x, to.y),
               thickness: element.strokeWidth,
               color: rgb(color.r, color.g, color.b),
               lineCap: LineCapStyle.Round,

@@ -47,6 +47,7 @@ export async function renderPageToCanvas(
   canvas: HTMLCanvasElement,
   cssWidth: number,
   rotation = 0,
+  signal?: AbortSignal,
 ): Promise<RenderedPageInfo> {
   const page = await doc.getPage(pageIndex + 1);
   const base = page.getViewport({ scale: 1 });
@@ -59,8 +60,15 @@ export async function renderPageToCanvas(
   canvas.height = Math.floor(viewport.height);
   canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
   canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
-  await page.render({ canvas, canvasContext: context, viewport }).promise;
-  page.cleanup();
+  const renderTask = page.render({ canvas, canvasContext: context, viewport });
+  const cancel = () => renderTask.cancel();
+  signal?.addEventListener("abort", cancel, { once: true });
+  try {
+    await renderTask.promise;
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+    page.cleanup();
+  }
   return { widthPt: base.width, heightPt: base.height };
 }
 

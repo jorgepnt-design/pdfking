@@ -1346,14 +1346,12 @@ function CanvasRenderer({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let cancelled = false;
-    void renderPageToCanvas(jsDoc, pageIndex, canvas, width, rotation)
-      .then(() => {
-        void cancelled;
-      })
-      .catch(() => undefined);
+    const controller = new AbortController();
+    void renderPageToCanvas(jsDoc, pageIndex, canvas, width, rotation, controller.signal).catch(
+      () => undefined,
+    );
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [jsDoc, pageIndex, width, canvasRef, rotation]);
   return null;
