@@ -10,6 +10,7 @@ import { ErrorAlert, InfoAlert, WarningAlert } from "@/components/ui/alerts";
 import { Button } from "@/components/ui/button";
 import { FieldLabel, Input } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useClientValue } from "@/hooks/useClientValue";
 import { useProcessing } from "@/hooks/useProcessing";
 import type { StoredSignatureMeta, SignatureSource } from "@/lib/types";
 import {
@@ -37,13 +38,19 @@ import { validateImageFile } from "@/lib/validate";
 
 export default function UnterschreibenPage() {
   const processing = useProcessing();
-  const [returnToEditor, setReturnToEditor] = useState(false);
+  const returnToEditor = useClientValue(
+    () => new URLSearchParams(window.location.search).get("returnTo") === "editor",
+    false,
+  );
   const [signatures, setSignatures] = useState<StoredSignatureMeta[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [nameInput, setNameInput] = useState("");
   const [localSignatureCount, setLocalSignatureCount] = useState<number | null>(null);
   const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
-  const [isCoroaHost, setIsCoroaHost] = useState(false);
+  const isCoroaHost = useClientValue(
+    () => window.location.hostname === "coroapdf.vercel.app",
+    false,
+  );
 
   // Zeichnen
   const padRef = useRef<HTMLCanvasElement>(null);
@@ -71,7 +78,6 @@ export default function UnterschreibenPage() {
   }, []);
 
   useEffect(() => {
-    setIsCoroaHost(window.location.hostname === "coroapdf.vercel.app");
     void unlockSignatureStore()
       .then(() => refreshList())
       .catch(() => setLocalSignatureCount(0));
@@ -146,10 +152,6 @@ export default function UnterschreibenPage() {
       );
     }
   };
-
-  useEffect(() => {
-    setReturnToEditor(new URLSearchParams(window.location.search).get("returnTo") === "editor");
-  }, []);
 
   const persist = async (dataUrl: string, name: string, source: SignatureSource) => {
     const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
