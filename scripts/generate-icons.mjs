@@ -266,6 +266,7 @@ mkdirSync(outDir, { recursive: true });
 // Eindeutige Dateinamen ohne „?v=…“: iOS hält Homescreen-Icons teils unabhängig
 // vom Query-String im Cache. Bei einem neuen Design hier die Namen ändern.
 const OUTPUTS = [
+  { size: 1024, name: "coroa-icon-1024.png" },
   { size: 512, name: "coroa-icon-512.png" },
   { size: 192, name: "coroa-icon-192.png" },
   { size: 180, name: "coroa-apple-180.png" },

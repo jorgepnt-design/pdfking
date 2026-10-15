@@ -13,6 +13,12 @@ export const metadata: Metadata = {
   description:
     "CoroaPDF: PDFs bearbeiten, organisieren, verkleinern, unterschreiben und konvertieren – standardmäßig vollständig lokal im Browser.",
   manifest: "/manifest.webmanifest",
+  // iOS: Name und Verhalten der Homescreen-Web-App (Icon kommt aus apple-touch-icon)
+  appleWebApp: {
+    capable: true,
+    title: "CoroaPDF",
+    statusBarStyle: "default",
+  },
   icons: {
     icon: [{ url: "/icons/coroa-icon-32.png", sizes: "32x32", type: "image/png" }],
     apple: [
