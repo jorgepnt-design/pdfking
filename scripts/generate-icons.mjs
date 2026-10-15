@@ -35,18 +35,26 @@ function chunk(type, data) {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
+/** PNG ohne Alphakanal (RGB) – iOS erwartet Homescreen-Icons ohne Transparenz. */
 function encodePng(width, height, rgba) {
   const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
-  ihdr[9] = 6;
-  const stride = width * 4;
+  ihdr[9] = 2;
+  const stride = width * 3;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y++) {
-    raw[y * (stride + 1)] = 0;
-    rgba.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
+    const row = y * (stride + 1);
+    raw[row] = 0;
+    for (let x = 0; x < width; x++) {
+      const source = (y * width + x) * 4;
+      const target = row + 1 + x * 3;
+      raw[target] = rgba[source];
+      raw[target + 1] = rgba[source + 1];
+      raw[target + 2] = rgba[source + 2];
+    }
   }
   return Buffer.concat([
     sig,
@@ -254,15 +262,25 @@ function encodeIco(size, png) {
 
 const publicDir = join(outDir, "..");
 mkdirSync(outDir, { recursive: true });
-for (const size of [512, 192, 180, 32]) {
-  const name = size === 180 ? "apple-touch-icon.png" : `icon-${size}.png`;
+
+// Eindeutige Dateinamen ohne „?v=…“: iOS hält Homescreen-Icons teils unabhängig
+// vom Query-String im Cache. Bei einem neuen Design hier die Namen ändern.
+const OUTPUTS = [
+  { size: 512, name: "coroa-icon-512.png" },
+  { size: 192, name: "coroa-icon-192.png" },
+  { size: 180, name: "coroa-apple-180.png" },
+  { size: 167, name: "coroa-apple-167.png" },
+  { size: 152, name: "coroa-apple-152.png" },
+  { size: 32, name: "coroa-icon-32.png" },
+];
+
+for (const { size, name } of OUTPUTS) {
   const png = encodePng(size, size, resample(size));
   writeFileSync(join(outDir, name), png);
   console.log(`[generate-icons] ${name} (${size}×${size}) geschrieben.`);
 
   // iOS fragt das Homescreen-Icon teils fest unter diesen Pfaden im
-  // Hauptverzeichnis ab (z. B. beim Aktualisieren des Symbols). Fehlen sie,
-  // zeigt das iPhone ein leeres bzw. graues Symbol.
+  // Hauptverzeichnis ab. Fehlen sie, zeigt das iPhone kein Symbol.
   if (size === 180) {
     for (const rootName of ["apple-touch-icon.png", "apple-touch-icon-precomposed.png"]) {
       writeFileSync(join(publicDir, rootName), png);
