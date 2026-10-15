@@ -325,6 +325,41 @@ export function createManualField(
 export const MIN_FONT_SIZE = 5;
 export const MAX_FONT_SIZE = 36;
 
+/** Begrenzt auf den erlaubten Bereich und rundet auf halbe Punkte. */
+export function clampFontSize(fontSize: number): number {
+  return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize * 2) / 2));
+}
+
+/**
+ * Wendet eine Schriftgröße auf alle beschreibbaren Textfelder an (nicht auf
+ * echte Formularfelder), damit das ganze Dokument einheitlich ausgefüllt wird.
+ */
+export function applyFontSizeToAll(fields: FillField[], fontSize: number): FillField[] {
+  return fields.map((field) =>
+    field.kind === "text" && !field.acro ? withFontSize(field, fontSize) : field,
+  );
+}
+
+const FONT_SIZE_STORAGE_KEY = "pdfking.fill.fontSize";
+
+/** Zuletzt gewählte Schriftgröße (bleibt auch für das nächste PDF erhalten). */
+export function loadPreferredFontSize(): number | null {
+  try {
+    const stored = Number(localStorage.getItem(FONT_SIZE_STORAGE_KEY));
+    return stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePreferredFontSize(fontSize: number): void {
+  try {
+    localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(fontSize));
+  } catch {
+    // Ohne Speicher gilt die Größe nur bis zum Schließen der Seite.
+  }
+}
+
 /** Schriftgröße, die ein Feld standardmäßig verwendet. */
 export function defaultFontSize(field: FillRect, multiline: boolean): number {
   if (multiline) return 11;
@@ -361,7 +396,7 @@ export function firstBaseline(
  * Linie wachsen nach oben, damit der Text auf der Linie bleibt.
  */
 export function withFontSize(field: FillField, fontSize: number): FillField {
-  const size = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize * 2) / 2));
+  const size = clampFontSize(fontSize);
   const needed = field.multiline ? size * LINE_HEIGHT + 2 * PADDING : size * 1.3;
   if (field.height >= needed) return { ...field, fontSize: size };
   const grow = needed - field.height;
