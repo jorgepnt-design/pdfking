@@ -20,11 +20,11 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
   },
   icons: {
-    icon: [{ url: "/icons/coroa-icon-32.png", sizes: "32x32", type: "image/png" }],
+    icon: [{ url: "/icons/coroa-home-2026-32.png", sizes: "32x32", type: "image/png" }],
     apple: [
-      { url: "/icons/coroa-apple-180.png", sizes: "180x180", type: "image/png" },
-      { url: "/icons/coroa-apple-167.png", sizes: "167x167", type: "image/png" },
-      { url: "/icons/coroa-apple-152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/coroa-home-2026-apple-180.png", sizes: "180x180", type: "image/png" },
+      { url: "/icons/coroa-home-2026-apple-167.png", sizes: "167x167", type: "image/png" },
+      { url: "/icons/coroa-home-2026-apple-152.png", sizes: "152x152", type: "image/png" },
     ],
   },
 };
