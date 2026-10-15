@@ -27,7 +27,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/((?!icon-test/ohne-csp).*)",
+        source: "/(.*)",
         headers: securityHeaders,
       },
     ];
