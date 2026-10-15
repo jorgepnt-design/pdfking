@@ -1,6 +1,20 @@
 /* CoroaPDF Service Worker – eingeschränkte Offline-Nutzung der App-Shell. */
-const CACHE_VERSION = "coroapdf-v9";
-const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const CACHE_VERSION = "coroapdf-v10";
+const PRECACHE = ["/"];
+
+/**
+ * Icons und Manifest nie über den Service Worker ausliefern: iOS lädt das
+ * Homescreen-Symbol beim „Zum Home-Bildschirm“ und braucht dafür die aktuelle
+ * Datei direkt vom Server.
+ */
+function isAppIconRequest(url) {
+  return (
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/apple-touch-icon") ||
+    url.pathname === "/favicon.ico" ||
+    url.pathname === "/manifest.webmanifest"
+  );
+}
 
 /** Nur erfolgreiche Antworten cachen – sonst würden 404/500 dauerhaft ausgeliefert. */
 function cacheIfOk(request, response) {
@@ -34,6 +48,7 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+  if (url.origin === self.location.origin && isAppIconRequest(url)) return;
 
   // Navigationen: Netzwerk zuerst, Fallback auf Cache (App-Shell).
   if (request.mode === "navigate") {
@@ -52,7 +67,6 @@ self.addEventListener("fetch", (event) => {
   if (
     url.origin === self.location.origin &&
     (url.pathname.startsWith("/_next/static") ||
-      url.pathname.startsWith("/icons/") ||
       url.pathname.endsWith(".css") ||
       url.pathname.endsWith(".js") ||
       url.pathname.endsWith(".woff2"))
