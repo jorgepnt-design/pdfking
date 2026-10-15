@@ -21,11 +21,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [{ url: "/icons/coroa-home-2026-32.png", sizes: "32x32", type: "image/png" }],
-    apple: [
-      { url: "/icons/coroa-home-2026-apple-180.png", sizes: "180x180", type: "image/png" },
-      { url: "/icons/coroa-home-2026-apple-167.png", sizes: "167x167", type: "image/png" },
-      { url: "/icons/coroa-home-2026-apple-152.png", sizes: "152x152", type: "image/png" },
-    ],
+    apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
   },
 };
 
