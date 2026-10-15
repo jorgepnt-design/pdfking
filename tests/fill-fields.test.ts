@@ -5,6 +5,7 @@ import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import {
   exportFilledPdf,
   findLabel,
+  applyFontSizeToAll,
   firstBaseline,
   withFontSize,
   type FillField,
@@ -198,5 +199,33 @@ describe("withFontSize", () => {
 
   it("verkleinert ohne das Feld zu verschieben", () => {
     expect(withFontSize(base, 8)).toMatchObject({ y: 100, height: 18, fontSize: 8 });
+  });
+});
+
+describe("Schriftgröße für alle Felder", () => {
+  const make = (overrides: Partial<FillField>): FillField => ({
+    id: "f",
+    pageIndex: 0,
+    x: 10,
+    y: 100,
+    width: 200,
+    height: 18,
+    kind: "text",
+    source: "erkannt",
+    label: "Feld",
+    multiline: false,
+    onLine: true,
+    ...overrides,
+  });
+
+  it("übernimmt die Größe für alle Textfelder, aber nicht für Kästchen und Formularfelder", () => {
+    const fields = [
+      make({ id: "a" }),
+      make({ id: "b", source: "manuell" }),
+      make({ id: "c", kind: "checkbox", width: 10, height: 10 }),
+      make({ id: "d", source: "formular", acro: { name: "x", readOnly: false } }),
+    ];
+    const result = applyFontSizeToAll(fields, 16);
+    expect(result.map((field) => field.fontSize)).toEqual([16, 16, undefined, undefined]);
   });
 });

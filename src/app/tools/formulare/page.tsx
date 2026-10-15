@@ -20,6 +20,10 @@ import {
   firstBaseline,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
+  applyFontSizeToAll,
+  clampFontSize,
+  loadPreferredFontSize,
+  savePreferredFontSize,
   withFontSize,
   type FillField,
   type FillValues,
@@ -52,6 +56,7 @@ export default function FormularePage() {
   const [resultBytes, setResultBytes] = useState<Uint8Array | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [preferredFontSize, setPreferredFontSize] = useState<number | null>(null);
   const destroyRef = useRef<(() => Promise<void>) | null>(null);
   const manualCounter = useRef(0);
 
@@ -103,10 +108,13 @@ export default function FormularePage() {
         void destroyRef.current?.().catch(() => undefined);
         destroyRef.current = loaded.destroy;
         manualCounter.current = 0;
+        // Zuletzt gewählte Schriftgröße auch für dieses Dokument verwenden.
+        const fontSize = loadPreferredFontSize();
+        setPreferredFontSize(fontSize);
         setSource({ name: file.name, size: file.size, bytes });
         setDoc(loaded.doc);
         setPageSizes(sizes);
-        setFields(nextFields);
+        setFields(fontSize ? applyFontSizeToAll(nextFields, fontSize) : nextFields);
         setValues(nextValues);
         setPageIndex(0);
         setResultBytes(null);
@@ -138,12 +146,22 @@ export default function FormularePage() {
     setResultBytes(null);
   };
 
+  /** Eine geänderte Schriftgröße gilt für alle Felder und bleibt gespeichert. */
+  const changeFontSize = (fontSize: number) => {
+    const size = clampFontSize(fontSize);
+    setPreferredFontSize(size);
+    savePreferredFontSize(size);
+    setFields((current) => applyFontSizeToAll(current, size));
+    setResultBytes(null);
+  };
+
   const addField = (
     rect: { x: number; y: number; width: number; height: number },
     onLine: boolean,
   ) => {
     manualCounter.current += 1;
-    const field = createManualField(pageIndex, rect, manualCounter.current, onLine);
+    const created = createManualField(pageIndex, rect, manualCounter.current, onLine);
+    const field = preferredFontSize ? withFontSize(created, preferredFontSize) : created;
     setFields((current) => [...current, field]);
     setFocusId(field.id);
     setAddMode(false);
@@ -237,6 +255,7 @@ export default function FormularePage() {
               onSelect={setSelectedId}
               onChange={updateValue}
               onUpdate={updateField}
+              onFontSize={changeFontSize}
               onRemove={removeField}
               onAdd={addField}
             />
@@ -284,8 +303,8 @@ export default function FormularePage() {
             <InfoAlert title="Bitte prüfen">
               Die Erkennung ist automatisch und kann Stellen übersehen oder zu viel markieren.
               Klicke in ein Feld, um es über die Leiste darüber zu verschieben (Griff ziehen oder
-              Pfeiltasten), die Schriftgröße zu ändern oder es mit ✕ zu entfernen. Eingetragener
-              Text wird beim Speichern fest ins PDF geschrieben.
+              Pfeiltasten), die Schriftgröße für alle Felder zu ändern oder es mit ✕ zu entfernen.
+              Eingetragener Text wird beim Speichern fest ins PDF geschrieben.
             </InfoAlert>
 
             {acroCount > 0 ? (
@@ -335,6 +354,7 @@ interface FillPageViewProps {
   onSelect: (id: string | null) => void;
   onChange: (field: FillField, value: string | boolean) => void;
   onUpdate: (id: string, update: (field: FillField) => FillField) => void;
+  onFontSize: (fontSize: number) => void;
   onRemove: (field: FillField) => void;
   onAdd: (rect: { x: number; y: number; width: number; height: number }, onLine: boolean) => void;
 }
@@ -352,6 +372,7 @@ function FillPageView({
   onSelect,
   onChange,
   onUpdate,
+  onFontSize,
   onRemove,
   onAdd,
 }: FillPageViewProps) {
@@ -528,9 +549,7 @@ function FillPageView({
               scale={k}
               pageHeight={size.height}
               onMove={(dx, dy) => moveBy(selected, dx, dy)}
-              onFontSize={(fontSize) =>
-                onUpdate(selected.id, (current) => withFontSize(current, fontSize))
-              }
+              onFontSize={onFontSize}
               onRemove={() => {
                 onSelect(null);
                 onRemove(selected);
@@ -639,8 +658,8 @@ function FieldToolbar({
           <button
             type="button"
             className={buttonClass}
-            aria-label="Schrift verkleinern"
-            title="Schrift verkleinern"
+            aria-label="Schrift verkleinern (alle Felder)"
+            title="Schrift verkleinern – gilt für alle Felder"
             disabled={fontSize <= MIN_FONT_SIZE}
             onClick={() => onFontSize(fontSize - 1)}
           >
@@ -652,8 +671,8 @@ function FieldToolbar({
           <button
             type="button"
             className={buttonClass}
-            aria-label="Schrift vergrößern"
-            title="Schrift vergrößern"
+            aria-label="Schrift vergrößern (alle Felder)"
+            title="Schrift vergrößern – gilt für alle Felder"
             disabled={fontSize >= MAX_FONT_SIZE}
             onClick={() => onFontSize(fontSize + 1)}
           >
