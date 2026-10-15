@@ -1,6 +1,6 @@
 /**
  * CoroaPDF App-Icon-Generator
- * Zeichnet das gekrönte C-Monogramm in portugiesischem Grün mit rotem Akzent
+ * Zeichnet das kräftige C mit goldener Krone (Vorlage: assets/app-icon.svg)
  * und exportiert alle benötigten Größen als PNG – ohne externe Abhängigkeiten.
  */
 import { deflateSync } from "node:zlib";
@@ -80,33 +80,83 @@ function distanceToSegment(px, py, ax, ay, bx, by) {
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-/* ---------------- Layout (Anteile der Kantenlänge) ---------------- */
+/* ---------------- Layout (Koordinaten im 1024er-Raster, siehe assets/app-icon.svg) ---------------- */
 
-const BG_A = hex("#0b8748");
-const BG_B = hex("#075f32");
+const BG_A = hex("#11a35c");
+const BG_B = hex("#064d29");
 const WHITE = hex("#ffffff");
 const RED = hex("#e52535");
+const GOLD_LIGHT = hex("#ffe08a");
+const GOLD_DARK = hex("#f0a500");
+const GOLD_EDGE = hex("#a86f00");
 
 const S = MASTER;
+const U = S / 1024;
 
-const CX = 0.49 * S;
-const CY = 0.62 * S;
-const OUTER_R = 0.25 * S;
-const INNER_R = 0.14 * S;
-const MID_R = (OUTER_R + INNER_R) / 2;
-const C_STROKE_RADIUS = (OUTER_R - INNER_R) / 2;
-const C_OPEN_ANGLE = 0.7;
-const CROWN_STROKE = 0.022 * S;
-const CROWN_PATH = [
-  [0.33 * S, 0.29 * S],
-  [0.33 * S, 0.20 * S],
-  [0.43 * S, 0.26 * S],
-  [0.50 * S, 0.145 * S],
-  [0.57 * S, 0.26 * S],
-  [0.67 * S, 0.20 * S],
-  [0.67 * S, 0.29 * S],
+// Kräftiges C: Kreisbogen mit Öffnung nach rechts und runden Enden
+const C_CX = 491.6 * U;
+const C_CY = 600 * U;
+const C_R = 215 * U;
+const C_HALF = 60 * U;
+const C_OPEN = Math.atan2(120, 178.4);
+const C_CAPS = [
+  [C_CX + C_R * Math.cos(-C_OPEN), C_CY + C_R * Math.sin(-C_OPEN)],
+  [C_CX + C_R * Math.cos(C_OPEN), C_CY + C_R * Math.sin(C_OPEN)],
 ];
-const CROWN_BASE = [[0.37 * S, 0.325 * S], [0.63 * S, 0.325 * S]];
+
+// Goldene Krone (Polygon) mit Kronreif, rotem Edelstein und zwei Perlen
+const CROWN = [
+  [300, 340],
+  [280, 170],
+  [410, 250],
+  [512, 120],
+  [614, 250],
+  [744, 170],
+  [724, 340],
+].map(([x, y]) => [x * U, y * U]);
+const CROWN_TOP = 120 * U;
+const CROWN_BOTTOM = 340 * U;
+const BAND = { x0: 300 * U, y0: 330 * U, x1: 724 * U, y1: 370 * U, r: 14 * U };
+const OUTLINE = 5 * U;
+const JEWEL = { x: 512 * U, y: 230 * U, r: 30 * U };
+const PEARLS = [
+  { x: 400 * U, y: 300 * U, r: 18 * U },
+  { x: 624 * U, y: 300 * U, r: 18 * U },
+];
+
+function insidePolygon(px, py, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceToPolygon(px, py, polygon) {
+  let best = Infinity;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    best = Math.min(
+      best,
+      distanceToSegment(px, py, polygon[j][0], polygon[j][1], polygon[i][0], polygon[i][1]),
+    );
+  }
+  return best;
+}
+
+/** Vorzeichenbehafteter Abstand zu einem abgerundeten Rechteck (negativ = innen). */
+function roundedRectDistance(px, py, rect) {
+  const cx = (rect.x0 + rect.x1) / 2;
+  const cy = (rect.y0 + rect.y1) / 2;
+  const qx = Math.abs(px - cx) - ((rect.x1 - rect.x0) / 2 - rect.r);
+  const qy = Math.abs(py - cy) - ((rect.y1 - rect.y0) / 2 - rect.r);
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rect.r;
+}
+
+function gold(py, top, bottom) {
+  return mix(GOLD_LIGHT, GOLD_DARK, Math.max(0, Math.min(1, (py - top) / (bottom - top))));
+}
 
 /* ---------------- Master-Rendering (2048², Kanten später geglättet) ---------------- */
 
@@ -116,49 +166,28 @@ for (let y = 0; y < S; y++) {
   for (let x = 0; x < S; x++) {
     const i = (y * S + x) * 4;
 
-    // 1) Portugiesisch grüner Hintergrund
-    let col = mix(BG_A, BG_B, (x / S) * 0.45 + (y / S) * 0.55);
-    const edge = Math.min(x, y, S - 1 - x, S - 1 - y) / S;
-    if (edge < 0.06) {
-      col = mix(col, hex("#034a27"), (1 - edge / 0.06) * 0.2);
-    }
+    // 1) Grüner Verlauf von oben links nach unten rechts
+    let col = mix(BG_A, BG_B, (x + y) / (2 * S));
 
-    // 2) Weißes C mit einer klaren Öffnung rechts
-    const angle = Math.atan2(y - CY, x - CX);
-    const radius = Math.hypot(x - CX, y - CY);
-    const upperCap = [CX + MID_R * Math.cos(-C_OPEN_ANGLE), CY + MID_R * Math.sin(-C_OPEN_ANGLE)];
-    const lowerCap = [CX + MID_R * Math.cos(C_OPEN_ANGLE), CY + MID_R * Math.sin(C_OPEN_ANGLE)];
-    const onArc = Math.abs(radius - MID_R) < C_STROKE_RADIUS && Math.abs(angle) >= C_OPEN_ANGLE;
-    const onCap =
-      Math.hypot(x - upperCap[0], y - upperCap[1]) < C_STROKE_RADIUS ||
-      Math.hypot(x - lowerCap[0], y - lowerCap[1]) < C_STROKE_RADIUS;
+    // 2) Kräftiges weißes C
+    const angle = Math.atan2(y - C_CY, x - C_CX);
+    const radius = Math.hypot(x - C_CX, y - C_CY);
+    const onArc = Math.abs(radius - C_R) < C_HALF && Math.abs(angle) >= C_OPEN;
+    const onCap = C_CAPS.some(([cx, cy]) => Math.hypot(x - cx, y - cy) < C_HALF);
     if (onArc || onCap) col = WHITE;
 
-    // 3) Feine, symmetrische Kronenkontur oberhalb des C
-    for (let point = 1; point < CROWN_PATH.length; point++) {
-      const from = CROWN_PATH[point - 1];
-      const to = CROWN_PATH[point];
-      if (distanceToSegment(x, y, from[0], from[1], to[0], to[1]) < CROWN_STROKE) {
-        col = WHITE;
-        break;
-      }
-    }
-    if (
-      distanceToSegment(
-        x,
-        y,
-        CROWN_BASE[0][0],
-        CROWN_BASE[0][1],
-        CROWN_BASE[1][0],
-        CROWN_BASE[1][1],
-      ) < CROWN_STROKE
-    ) {
-      col = WHITE;
-    }
+    // 3) Goldene Krone mit dunkler Kontur
+    if (insidePolygon(x, y, CROWN)) col = gold(y, CROWN_TOP, CROWN_BOTTOM);
+    if (distanceToPolygon(x, y, CROWN) < OUTLINE) col = GOLD_EDGE;
 
-    // 4) Kleiner roter Edelstein in der Krone statt eines angesetzten Strichs
-    if (Math.abs(x - 0.5 * S) + Math.abs(y - 0.255 * S) < 0.025 * S) {
-      col = RED;
+    // 4) Kronreif
+    const band = roundedRectDistance(x, y, BAND);
+    if (band < OUTLINE) col = band < -OUTLINE ? gold(y, BAND.y0, BAND.y1) : GOLD_EDGE;
+
+    // 5) Roter Edelstein und zwei Perlen
+    if (Math.hypot(x - JEWEL.x, y - JEWEL.y) < JEWEL.r) col = RED;
+    for (const pearl of PEARLS) {
+      if (Math.hypot(x - pearl.x, y - pearl.y) < pearl.r) col = WHITE;
     }
 
     img[i] = col[0];

@@ -1,5 +1,5 @@
 /* CoroaPDF Service Worker – eingeschränkte Offline-Nutzung der App-Shell. */
-const CACHE_VERSION = "coroapdf-v8";
+const CACHE_VERSION = "coroapdf-v9";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 /** Nur erfolgreiche Antworten cachen – sonst würden 404/500 dauerhaft ausgeliefert. */
