@@ -3,7 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
+// Passend zum Legacy-Build in src/lib/pdf/pdfjs.ts (Kompatibilität mit älteren Browsern).
 const candidates = [
+  join(root, "..", "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.min.mjs"),
   join(root, "..", "node_modules", "pdfjs-dist", "build", "pdf.worker.min.mjs"),
   join(root, "..", "node_modules", "pdfjs-dist", "build", "pdf.worker.min.js"),
 ];

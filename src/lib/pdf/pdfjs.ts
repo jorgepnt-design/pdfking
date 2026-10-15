@@ -8,7 +8,11 @@ let libPromise: Promise<PdfJsLib> | null = null;
 
 export async function getPdfJs(): Promise<PdfJsLib> {
   if (!libPromise) {
-    libPromise = import("pdfjs-dist").then((lib) => {
+    // Legacy-Build: Der Standard-Build von pdf.js 6 setzt sehr neue JavaScript-
+    // Funktionen voraus (z. B. Map.prototype.getOrInsertComputed) und kann in
+    // älteren Browsern kein einziges PDF öffnen. Der Legacy-Build bringt die
+    // nötigen Polyfills mit; die API ist identisch.
+    libPromise = (import("pdfjs-dist/legacy/build/pdf.mjs") as Promise<PdfJsLib>).then((lib) => {
       lib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       return lib;
     });
