@@ -207,9 +207,41 @@ function resample(dstSize) {
   return out;
 }
 
+/** ICO-Container mit eingebettetem PNG (von allen aktuellen Browsern unterstützt). */
+function encodeIco(size, png) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(1, 4);
+  const entry = Buffer.alloc(16);
+  entry[0] = size >= 256 ? 0 : size;
+  entry[1] = size >= 256 ? 0 : size;
+  entry.writeUInt16LE(1, 4);
+  entry.writeUInt16LE(32, 6);
+  entry.writeUInt32LE(png.length, 8);
+  entry.writeUInt32LE(header.length + entry.length, 12);
+  return Buffer.concat([header, entry, png]);
+}
+
+const publicDir = join(outDir, "..");
 mkdirSync(outDir, { recursive: true });
 for (const size of [512, 192, 180, 32]) {
   const name = size === 180 ? "apple-touch-icon.png" : `icon-${size}.png`;
-  writeFileSync(join(outDir, name), encodePng(size, size, resample(size)));
+  const png = encodePng(size, size, resample(size));
+  writeFileSync(join(outDir, name), png);
   console.log(`[generate-icons] ${name} (${size}×${size}) geschrieben.`);
+
+  // iOS fragt das Homescreen-Icon teils fest unter diesen Pfaden im
+  // Hauptverzeichnis ab (z. B. beim Aktualisieren des Symbols). Fehlen sie,
+  // zeigt das iPhone ein leeres bzw. graues Symbol.
+  if (size === 180) {
+    for (const rootName of ["apple-touch-icon.png", "apple-touch-icon-precomposed.png"]) {
+      writeFileSync(join(publicDir, rootName), png);
+      console.log(`[generate-icons] /${rootName} geschrieben.`);
+    }
+  }
+  if (size === 32) {
+    writeFileSync(join(publicDir, "favicon.ico"), encodeIco(size, png));
+    console.log("[generate-icons] /favicon.ico geschrieben.");
+  }
 }

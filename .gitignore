@@ -34,6 +34,9 @@ Thumbs.db
 
 # Generierte Dateien
 /public/icons/*.png
+/public/apple-touch-icon.png
+/public/apple-touch-icon-precomposed.png
+/public/favicon.ico
 /public/pdf.worker.min.mjs
 /public/tesseract/
 
