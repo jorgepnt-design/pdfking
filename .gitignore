@@ -35,6 +35,7 @@ Thumbs.db
 # Generierte Dateien
 /public/icons/*.png
 /public/pdf.worker.min.mjs
+/public/tesseract/
 
 # TypeScript
 *.tsbuildinfo
