@@ -62,7 +62,10 @@ Serverfunktionen sind deaktiviert, solange kein Backend konfiguriert ist, und we
 - **Verschlüsseln** mit AES-256 (ISO 32000-2) inkl. Berechtigungen (Drucken/Kopieren/Ändern …)
 - **Passwort entfernen** nach Eingabe des korrekten Passworts
 - **Schwärzen mit Garantie**: Betroffene Seiten werden gerastert, nachdem die Bereiche geschwärzt wurden – der Inhalt ist physisch entfernt, nicht überdeckt
-- **Formulare**: AcroForm-Felder erkennen, ausfüllen, optional abflachen
+- **Formulare ausfüllen**: Ausfüllstellen werden automatisch erkannt und direkt auf der Seite beschrieben
+  - echte Formularfelder (AcroForm: Text, Kontrollkästchen, Auswahllisten, Optionsfelder) an ihrer Position, optional abflachen
+  - per Bildanalyse auch in normalen und gescannten PDFs: Schreiblinien, leere Kästen und Tabellenzellen, Ankreuzkästchen – inkl. Beschriftungserkennung
+  - eigene Felder per Klick oder Rechteck ergänzen, überflüssige entfernen; Text wird beim Speichern fest ins PDF geschrieben
 
 ### 🔍 OCR & Extraktion
 

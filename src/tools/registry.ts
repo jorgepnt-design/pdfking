@@ -52,8 +52,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     id: "reader",
     title: "PDF Reader",
-    description:
-      "PDFs bequem lesen – mit Seitenwechsel, Zoom, Drehung und Vollbildansicht.",
+    description: "PDFs bequem lesen – mit Seitenwechsel, Zoom, Drehung und Vollbildansicht.",
     category: "bearbeiten",
     href: "/tools/lesen",
     icon: BookOpen,
@@ -193,7 +192,8 @@ export const TOOLS: ToolDefinition[] = [
   {
     id: "forms",
     title: "Formulare ausfüllen",
-    description: "Formularfelder automatisch erkennen und direkt im Browser ausfüllen.",
+    description:
+      "Erkennt automatisch, wo etwas eingetragen werden muss – auch bei gescannten Formularen – und du schreibst direkt auf der Seite.",
     category: "sicherheit",
     href: "/tools/formulare",
     icon: FormInput,
