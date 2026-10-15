@@ -20,6 +20,10 @@ export interface FillField extends FillRect {
   source: FillFieldSource;
   label: string;
   multiline: boolean;
+  /** Text sitzt auf der Unterkante (Schreiblinie) statt mittig im Feld. */
+  onLine: boolean;
+  /** Vom Nutzer gewählte Schriftgröße in Punkt; sonst automatisch. */
+  fontSize?: number;
   /** Nur bei echten PDF-Formularfeldern (AcroForm). */
   acro?: {
     name: string;
@@ -97,6 +101,7 @@ async function readAcroFields(
       source: "formular" as const,
       label: widget.alternativeText || widget.fieldName,
       multiline: false,
+      onLine: false,
     };
     const name = widget.fieldName;
     const readOnly = widget.readOnly === true;
@@ -165,6 +170,7 @@ async function readTextBoxes(
 
 function cleanLabel(text: string): string {
   return text
+    .replace(/^\((.*)\)$/u, "$1")
     .replace(/[_.…:]+$/u, "")
     .replace(/\s+/g, " ")
     .trim()
@@ -191,10 +197,12 @@ export function findLabel(field: FillRect, boxes: TextBox[]): string | null {
     ) {
       consider(box.text, field.x - boxRight);
     }
+    // Hinweise in Klammern wie „(Anschrift)" stehen unter ihrer Linie.
+    const isHint = /^\(.*\)$/u.test(box.text);
     // direkt darüber
     const gapAbove = field.y - (box.y + box.height);
     if (gapAbove >= -2 && gapAbove < 14 && box.x < field.x + field.width && boxRight > field.x) {
-      consider(box.text, gapAbove + 20);
+      consider(box.text, gapAbove + (isHint ? 60 : 20));
     }
     // rechts daneben – typisch für Ankreuzkästchen („☐ Newsletter abonnieren")
     if (
@@ -208,7 +216,7 @@ export function findLabel(field: FillRect, boxes: TextBox[]): string | null {
     // darunter (z. B. „Ort, Datum" unter einer Unterschriftslinie)
     const gapBelow = box.y - (field.y + field.height);
     if (gapBelow >= 0 && gapBelow < 12 && box.x < field.x + field.width && boxRight > field.x) {
-      consider(box.text, gapBelow + 40);
+      consider(box.text, gapBelow + (isHint ? 0 : 40));
     }
   }
   return (best as { text: string } | null)?.text ?? null;
@@ -277,6 +285,7 @@ export async function detectPageFillFields(
         source: "erkannt",
         label: textBoxes.length > 0 ? label : `${label} ${counter}`,
         multiline: area.kind === "text" && area.height >= 34,
+        onLine: area.source === "linie",
       });
     }
 
@@ -291,8 +300,16 @@ export async function detectPageFillFields(
   }
 }
 
-/** Erzeugt ein leeres, manuell platziertes Textfeld. */
-export function createManualField(pageIndex: number, rect: FillRect, number: number): FillField {
+/**
+ * Erzeugt ein leeres, manuell platziertes Textfeld. Bei `onLine` ist die
+ * Unterkante des Felds die Grundlinie (z. B. Klick auf eine Linie).
+ */
+export function createManualField(
+  pageIndex: number,
+  rect: FillRect,
+  number: number,
+  onLine: boolean,
+): FillField {
   return {
     id: uid(),
     pageIndex,
@@ -300,14 +317,60 @@ export function createManualField(pageIndex: number, rect: FillRect, number: num
     kind: "text",
     source: "manuell",
     label: `Eigenes Feld ${number}`,
-    multiline: rect.height >= 34,
+    multiline: !onLine && rect.height >= 34,
+    onLine,
   };
 }
+
+export const MIN_FONT_SIZE = 5;
+export const MAX_FONT_SIZE = 36;
 
 /** Schriftgröße, die ein Feld standardmäßig verwendet. */
 export function defaultFontSize(field: FillRect, multiline: boolean): number {
   if (multiline) return 11;
   return Math.max(6, Math.min(12, field.height * 0.65));
+}
+
+/** Schriftgröße des Felds: vom Nutzer gewählt oder automatisch. */
+export function fieldFontSize(field: FillField): number {
+  return field.fontSize ?? defaultFontSize(field, field.multiline);
+}
+
+const LINE_HEIGHT = TEXT_LINE_HEIGHT_FACTOR;
+/** Abstand der Grundlinie über der Schreiblinie (Anteil der Schriftgröße). */
+const ON_LINE_GAP = 0.15;
+const PADDING = 2;
+
+/**
+ * Lage der ersten Grundlinie in Punkt ab Feldoberkante. UI und Export nutzen
+ * dieselbe Rechnung, damit der Text im PDF dort steht, wo er getippt wurde.
+ */
+export function firstBaseline(
+  field: Pick<FillField, "height" | "multiline" | "onLine">,
+  fontSize: number,
+  lineCount = 1,
+): number {
+  if (field.multiline) return PADDING + fontSize * 0.97;
+  if (field.onLine)
+    return field.height - fontSize * ON_LINE_GAP - (lineCount - 1) * fontSize * LINE_HEIGHT;
+  return field.height / 2 + fontSize * 0.35 - ((lineCount - 1) * fontSize * LINE_HEIGHT) / 2;
+}
+
+/**
+ * Setzt die Schriftgröße und vergrößert das Feld bei Bedarf. Felder auf einer
+ * Linie wachsen nach oben, damit der Text auf der Linie bleibt.
+ */
+export function withFontSize(field: FillField, fontSize: number): FillField {
+  const size = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize * 2) / 2));
+  const needed = field.multiline ? size * LINE_HEIGHT + 2 * PADDING : size * 1.3;
+  if (field.height >= needed) return { ...field, fontSize: size };
+  const grow = needed - field.height;
+  return {
+    ...field,
+    fontSize: size,
+    height: needed,
+    y: field.onLine ? Math.max(0, field.y - grow) : field.y,
+  };
 }
 
 type MeasureFont = Awaited<ReturnType<PDFDocument["embedFont"]>>;
@@ -328,10 +391,6 @@ function wrapText(text: string, font: MeasureFont, size: number, maxWidth: numbe
   }
   return lines;
 }
-
-const LINE_HEIGHT = TEXT_LINE_HEIGHT_FACTOR;
-const MIN_FONT_SIZE = 5;
-const PADDING = 2;
 
 function layoutText(
   field: FillField,
@@ -354,11 +413,7 @@ function layoutText(
   let size = MIN_FONT_SIZE;
   let lines = attempts[attempts.length - 1](MIN_FONT_SIZE);
   search: for (const attempt of attempts) {
-    for (
-      let fontSize = defaultFontSize(field, field.multiline);
-      fontSize >= MIN_FONT_SIZE;
-      fontSize -= 0.5
-    ) {
+    for (let fontSize = fieldFontSize(field); fontSize >= MIN_FONT_SIZE; fontSize -= 0.5) {
       const candidate = attempt(fontSize);
       if (fits(candidate, fontSize)) {
         size = fontSize;
@@ -368,13 +423,8 @@ function layoutText(
     }
   }
 
-  const blockHeight = blockHeightOf(lines.length, size);
-  let y: number;
-  if (field.multiline) y = field.y + PADDING;
-  else if (field.source === "erkannt" && field.height <= 20) {
-    // Schreiblinien: knapp über der Linie schreiben
-    y = field.y + field.height - blockHeight - size * 0.25;
-  } else y = field.y + (field.height - blockHeight) / 2;
+  // Die Grundlinie der ersten Zeile liegt bei y + Schriftgröße (siehe annotate.ts).
+  const y = field.y + firstBaseline(field, size, lines.length) - size;
 
   return {
     x: field.x + PADDING,

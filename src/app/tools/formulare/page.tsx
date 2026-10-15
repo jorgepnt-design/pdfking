@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Move, Plus, X } from "lucide-react";
 import { ResultCard } from "@/components/shared/result-card";
 import { FileDropzone } from "@/components/shared/file-dropzone";
 import { ProcessingOverlay } from "@/components/shared/processing-overlay";
@@ -16,6 +16,11 @@ import {
   defaultFontSize,
   detectPageFillFields,
   exportFilledPdf,
+  fieldFontSize,
+  firstBaseline,
+  MAX_FONT_SIZE,
+  MIN_FONT_SIZE,
+  withFontSize,
   type FillField,
   type FillValues,
   type PageSize,
@@ -46,6 +51,7 @@ export default function FormularePage() {
   const [flatten, setFlatten] = useState(false);
   const [resultBytes, setResultBytes] = useState<Uint8Array | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const destroyRef = useRef<(() => Promise<void>) | null>(null);
   const manualCounter = useRef(0);
 
@@ -127,9 +133,17 @@ export default function FormularePage() {
     setResultBytes(null);
   };
 
-  const addField = (rect: { x: number; y: number; width: number; height: number }) => {
+  const updateField = (id: string, update: (field: FillField) => FillField) => {
+    setFields((current) => current.map((field) => (field.id === id ? update(field) : field)));
+    setResultBytes(null);
+  };
+
+  const addField = (
+    rect: { x: number; y: number; width: number; height: number },
+    onLine: boolean,
+  ) => {
     manualCounter.current += 1;
-    const field = createManualField(pageIndex, rect, manualCounter.current);
+    const field = createManualField(pageIndex, rect, manualCounter.current, onLine);
     setFields((current) => [...current, field]);
     setFocusId(field.id);
     setAddMode(false);
@@ -219,7 +233,10 @@ export default function FormularePage() {
               addMode={addMode}
               focusId={focusId}
               onFocused={() => setFocusId(null)}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
               onChange={updateValue}
+              onUpdate={updateField}
               onRemove={removeField}
               onAdd={addField}
             />
@@ -266,8 +283,9 @@ export default function FormularePage() {
 
             <InfoAlert title="Bitte prüfen">
               Die Erkennung ist automatisch und kann Stellen übersehen oder zu viel markieren.
-              Überflüssige Felder entfernst du mit ✕. Eingetragener Text wird beim Speichern fest
-              ins PDF geschrieben.
+              Klicke in ein Feld, um es über die Leiste darüber zu verschieben (Griff ziehen oder
+              Pfeiltasten), die Schriftgröße zu ändern oder es mit ✕ zu entfernen. Eingetragener
+              Text wird beim Speichern fest ins PDF geschrieben.
             </InfoAlert>
 
             {acroCount > 0 ? (
@@ -313,9 +331,12 @@ interface FillPageViewProps {
   addMode: boolean;
   focusId: string | null;
   onFocused: () => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
   onChange: (field: FillField, value: string | boolean) => void;
+  onUpdate: (id: string, update: (field: FillField) => FillField) => void;
   onRemove: (field: FillField) => void;
-  onAdd: (rect: { x: number; y: number; width: number; height: number }) => void;
+  onAdd: (rect: { x: number; y: number; width: number; height: number }, onLine: boolean) => void;
 }
 
 function FillPageView({
@@ -327,7 +348,10 @@ function FillPageView({
   addMode,
   focusId,
   onFocused,
+  selectedId,
+  onSelect,
   onChange,
+  onUpdate,
   onRemove,
   onAdd,
 }: FillPageViewProps) {
@@ -400,6 +424,7 @@ function FillPageView({
 
   const k = cssWidth > 0 ? cssWidth / size.width : 0;
   const cssHeight = size.height * k;
+  const selected = fields.find((field) => field.id === selectedId) ?? null;
 
   const toPagePoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -410,7 +435,12 @@ function FillPageView({
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!addMode || k === 0) return;
+    if (!addMode) {
+      // Klick auf eine freie Stelle hebt die Auswahl auf.
+      if (event.target === event.currentTarget) onSelect(null);
+      return;
+    }
+    if (k === 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = toPagePoint(event);
     dragRef.current = point;
@@ -436,13 +466,13 @@ function FillPageView({
     setDraft(null);
     if (!start || !rect) return;
     if (rect.width < 12 || rect.height < 8) {
-      // Einfacher Klick: Standardfeld mit der Klickposition als Grundlinie
+      // Einfacher Klick: Die Klickhöhe wird zur Schreiblinie des neuen Felds.
       const width = Math.min(160, size.width - start.x);
       const height = 18;
-      onAdd({ x: start.x, y: Math.max(0, start.y - height + 4), width, height });
+      onAdd({ x: start.x, y: Math.max(0, start.y - height), width, height }, true);
       return;
     }
-    onAdd(rect);
+    onAdd(rect, false);
   };
 
   const focusNext = (current: HTMLElement) => {
@@ -452,6 +482,13 @@ function FillPageView({
     const next = inputs[inputs.indexOf(current) + 1];
     next?.focus();
   };
+
+  const moveBy = (field: FillField, dx: number, dy: number) =>
+    onUpdate(field.id, (current) => ({
+      ...current,
+      x: Math.min(size.width - current.width, Math.max(0, current.x + dx)),
+      y: Math.min(size.height - current.height, Math.max(0, current.y + dy)),
+    }));
 
   return (
     <div ref={hostRef} className="w-full">
@@ -466,6 +503,9 @@ function FillPageView({
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onSelect(null);
+          }}
         >
           {k > 0
             ? fields.map((field) => (
@@ -475,12 +515,28 @@ function FillPageView({
                   value={values[valueKey(field)]}
                   scale={k}
                   disabled={addMode}
+                  selected={field.id === selectedId}
+                  onSelect={() => onSelect(field.id)}
                   onChange={(value) => onChange(field, value)}
-                  onRemove={() => onRemove(field)}
                   onEnter={focusNext}
                 />
               ))
             : null}
+          {k > 0 && selected && !selected.acro && !addMode ? (
+            <FieldToolbar
+              field={selected}
+              scale={k}
+              pageHeight={size.height}
+              onMove={(dx, dy) => moveBy(selected, dx, dy)}
+              onFontSize={(fontSize) =>
+                onUpdate(selected.id, (current) => withFontSize(current, fontSize))
+              }
+              onRemove={() => {
+                onSelect(null);
+                onRemove(selected);
+              }}
+            />
+          ) : null}
           {draft ? (
             <div
               className="pointer-events-none absolute border-2 border-dashed border-sky-500 bg-sky-200/30"
@@ -498,23 +554,151 @@ function FillPageView({
   );
 }
 
+interface FieldToolbarProps {
+  field: FillField;
+  scale: number;
+  pageHeight: number;
+  onMove: (dx: number, dy: number) => void;
+  onFontSize: (fontSize: number) => void;
+  onRemove: () => void;
+}
+
+const TOOLBAR_HEIGHT = 32;
+
+/** Leiste über dem ausgewählten Feld: verschieben, Schriftgröße, entfernen. */
+function FieldToolbar({
+  field,
+  scale,
+  pageHeight,
+  onMove,
+  onFontSize,
+  onRemove,
+}: FieldToolbarProps) {
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const top = field.y * scale - TOOLBAR_HEIGHT - 4;
+  const below = top < 0 && (field.y + field.height) * scale + TOOLBAR_HEIGHT < pageHeight * scale;
+  const fontSize = fieldFontSize(field);
+  const buttonClass =
+    "flex h-7 min-w-7 items-center justify-center rounded px-1 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-40";
+  // Klicks in der Leiste sollen das Eingabefeld nicht verlassen.
+  const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault();
+
+  return (
+    <div
+      role="toolbar"
+      aria-label={`Feld „${field.label}“ bearbeiten`}
+      className="absolute z-20 flex items-center gap-0.5 rounded-md bg-slate-800 px-1 text-xs text-white shadow-lg"
+      style={{
+        left: Math.max(0, field.x * scale),
+        top: below ? (field.y + field.height) * scale + 4 : Math.max(0, top),
+        height: TOOLBAR_HEIGHT,
+      }}
+      onMouseDown={keepFocus}
+    >
+      <button
+        type="button"
+        className={cn(buttonClass, "cursor-move touch-none")}
+        aria-label="Feld verschieben (ziehen oder Pfeiltasten)"
+        title="Ziehen zum Verschieben – oder Pfeiltasten (mit Umschalt in größeren Schritten)"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          dragRef.current = { x: event.clientX, y: event.clientY };
+        }}
+        onPointerMove={(event) => {
+          const start = dragRef.current;
+          if (!start) return;
+          const dx = (event.clientX - start.x) / scale;
+          const dy = (event.clientY - start.y) / scale;
+          if (dx === 0 && dy === 0) return;
+          dragRef.current = { x: event.clientX, y: event.clientY };
+          onMove(dx, dy);
+        }}
+        onPointerUp={() => {
+          dragRef.current = null;
+        }}
+        onKeyDown={(event) => {
+          const step = event.shiftKey ? 10 : 1;
+          const moves: Record<string, [number, number]> = {
+            ArrowLeft: [-step, 0],
+            ArrowRight: [step, 0],
+            ArrowUp: [0, -step],
+            ArrowDown: [0, step],
+          };
+          const move = moves[event.key];
+          if (!move) return;
+          event.preventDefault();
+          onMove(...move);
+        }}
+      >
+        <Move aria-hidden className="h-4 w-4" />
+      </button>
+      {field.kind === "text" ? (
+        <>
+          <span aria-hidden className="mx-0.5 h-4 w-px bg-white/30" />
+          <button
+            type="button"
+            className={buttonClass}
+            aria-label="Schrift verkleinern"
+            title="Schrift verkleinern"
+            disabled={fontSize <= MIN_FONT_SIZE}
+            onClick={() => onFontSize(fontSize - 1)}
+          >
+            <Minus aria-hidden className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-12 text-center tabular-nums" aria-live="polite">
+            {Number.isInteger(fontSize) ? fontSize : fontSize.toFixed(1)} pt
+          </span>
+          <button
+            type="button"
+            className={buttonClass}
+            aria-label="Schrift vergrößern"
+            title="Schrift vergrößern"
+            disabled={fontSize >= MAX_FONT_SIZE}
+            onClick={() => onFontSize(fontSize + 1)}
+          >
+            <Plus aria-hidden className="h-3.5 w-3.5" />
+          </button>
+        </>
+      ) : null}
+      <span aria-hidden className="mx-0.5 h-4 w-px bg-white/30" />
+      <button
+        type="button"
+        className={buttonClass}
+        aria-label={`„${field.label}“ entfernen`}
+        title="Feld entfernen"
+        onClick={onRemove}
+      >
+        <X aria-hidden className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 interface FieldInputProps {
   field: FillField;
   value: string | boolean | undefined;
   scale: number;
   disabled: boolean;
+  selected: boolean;
+  onSelect: () => void;
   onChange: (value: string | boolean) => void;
-  onRemove: () => void;
   onEnter: (current: HTMLElement) => void;
 }
+
+/** Schriftart der Eingabe – gleiche Metrik wie Helvetica im exportierten PDF. */
+const FIELD_FONT = "Helvetica, Arial, sans-serif";
+/** Grundlinie innerhalb einer Zeile mit line-height 1.2 (Helvetica/Arial-Metrik). */
+const BASELINE_IN_LINE = 0.9465;
 
 function FieldInput({
   field,
   value,
   scale,
   disabled,
+  selected,
+  onSelect,
   onChange,
-  onRemove,
   onEnter,
 }: FieldInputProps) {
   const readOnly = field.acro?.readOnly === true;
@@ -529,9 +713,15 @@ function FieldInput({
     "aria-label": field.label,
     title: field.label,
     disabled: disabled || readOnly,
+    onFocus: onSelect,
   };
-  const fieldClass =
-    "h-full w-full rounded-[2px] border border-sky-500/70 bg-sky-100/50 text-slate-900 outline-none focus:border-sky-600 focus:bg-white/90 focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed";
+  const frameClass = cn(
+    "rounded-[2px] border border-sky-500/70 bg-sky-100/50 text-slate-900",
+    "focus-within:border-sky-600 focus-within:bg-white/80 focus-within:ring-2 focus-within:ring-sky-500/40",
+    selected && "border-sky-600 ring-2 ring-sky-500/40",
+  );
+  const controlClass = "outline-none disabled:cursor-not-allowed";
+  const fontSize = fieldFontSize(field);
 
   let control;
   if (field.kind === "checkbox") {
@@ -542,7 +732,10 @@ function FieldInput({
         role="checkbox"
         aria-checked={checked}
         {...common}
-        className={cn(fieldClass, "flex items-center justify-center p-0 leading-none font-bold")}
+        className={cn(
+          controlClass,
+          "flex h-full w-full items-center justify-center p-0 leading-none font-bold",
+        )}
         style={{ fontSize: Math.min(field.width, field.height) * 0.85 * scale }}
         onClick={() => onChange(!checked)}
       >
@@ -557,7 +750,7 @@ function FieldInput({
         role="radio"
         aria-checked={checked}
         {...common}
-        className={cn(fieldClass, "flex items-center justify-center rounded-full p-0")}
+        className={cn(controlClass, "flex h-full w-full items-center justify-center p-0")}
         onClick={() => onChange(field.acro?.buttonValue ?? "")}
       >
         {checked ? <span className="h-1/2 w-1/2 rounded-full bg-slate-900" /> : null}
@@ -567,7 +760,7 @@ function FieldInput({
     control = (
       <select
         {...common}
-        className={cn(fieldClass, "p-0")}
+        className={cn(controlClass, "h-full w-full bg-transparent p-0")}
         style={{ fontSize: defaultFontSize(field, false) * scale }}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.target.value)}
@@ -584,19 +777,34 @@ function FieldInput({
     control = (
       <textarea
         {...common}
-        className={cn(fieldClass, "resize-none leading-tight")}
-        style={{ fontSize: defaultFontSize(field, true) * scale, padding: 2 * scale }}
+        className={cn(controlClass, "h-full w-full resize-none bg-transparent")}
+        style={{
+          fontSize: fontSize * scale,
+          fontFamily: FIELD_FONT,
+          lineHeight: 1.25,
+          padding: 2 * scale,
+        }}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.target.value)}
       />
     );
   } else {
+    // Die Eingabezeile so legen, dass ihre Grundlinie genau dort liegt, wo der
+    // Text im PDF landet – bei Schreiblinien also direkt auf der Linie.
+    const lineTop = firstBaseline(field, fontSize) - BASELINE_IN_LINE * fontSize;
     control = (
       <input
         type="text"
         {...common}
-        className={fieldClass}
-        style={{ fontSize: defaultFontSize(field, false) * scale, padding: `0 ${2 * scale}px` }}
+        className={cn(controlClass, "absolute inset-x-0 bg-transparent")}
+        style={{
+          top: lineTop * scale,
+          height: fontSize * 1.2 * scale,
+          fontSize: fontSize * scale,
+          fontFamily: FIELD_FONT,
+          lineHeight: 1.2,
+          padding: `0 ${2 * scale}px`,
+        }}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -610,19 +818,8 @@ function FieldInput({
   }
 
   return (
-    <div className="group absolute" style={style}>
+    <div className={cn("absolute", frameClass)} style={style}>
       {control}
-      {!field.acro && !disabled ? (
-        <button
-          type="button"
-          aria-label={`„${field.label}" entfernen`}
-          title="Feld entfernen"
-          className="absolute top-1/2 left-full z-10 ml-1 hidden h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-slate-700 text-white shadow group-focus-within:flex group-hover:flex"
-          onClick={onRemove}
-        >
-          <X aria-hidden className="h-3 w-3" />
-        </button>
-      ) : null}
     </div>
   );
 }

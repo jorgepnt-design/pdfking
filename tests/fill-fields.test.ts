@@ -2,7 +2,13 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { exportFilledPdf, findLabel, type FillField } from "../src/lib/pdf/fill-fields";
+import {
+  exportFilledPdf,
+  findLabel,
+  firstBaseline,
+  withFontSize,
+  type FillField,
+} from "../src/lib/pdf/fill-fields";
 
 const text = (value: string, x: number, y: number, width: number, height = 10) => ({
   text: value,
@@ -32,6 +38,12 @@ describe("findLabel", () => {
     expect(findLabel(field, [text("Unterschrift", 280, 322, 40, 8)])).toBe("Unterschrift");
   });
 
+  it("ordnet Klammer-Hinweise unter einer Linie dieser Linie zu", () => {
+    const boxes = [text("(Name)", 130, 155, 30), text("(Anschrift)", 70, 195, 50)];
+    // Feld über der zweiten Linie: „(Name)" gehört zur Linie darüber
+    expect(findLabel({ x: 70, y: 175, width: 450, height: 18 }, boxes)).toBe("Anschrift");
+  });
+
   it("liefert null ohne passende Beschriftung", () => {
     expect(findLabel({ x: 0, y: 0, width: 10, height: 10 }, [])).toBeNull();
   });
@@ -49,6 +61,7 @@ describe("exportFilledPdf", () => {
     source: "erkannt",
     label: "Name",
     multiline: false,
+    onLine: true,
     ...overrides,
   });
 
@@ -81,13 +94,31 @@ describe("exportFilledPdf", () => {
     const name = items.find((item) => item.str === "Max Mustermann");
     expect(name).toBeDefined();
     expect(name!.x).toBeCloseTo(102, 0);
-    // Grundlinie innerhalb des Felds, nahe der Unterkante (Schreiblinie)
-    expect(name!.y).toBeGreaterThan(100);
-    expect(name!.y).toBeLessThanOrEqual(118);
+    // Grundlinie direkt auf der Schreiblinie (Feldunterkante bei y = 118)
+    expect(name!.y).toBeGreaterThan(115);
+    expect(name!.y).toBeLessThan(118);
     const cross = items.find((item) => item.str === "X");
     expect(cross).toBeDefined();
     expect(cross!.y).toBeGreaterThan(200);
     expect(cross!.y).toBeLessThanOrEqual(210);
+  });
+
+  it("verwendet die vom Nutzer gewählte Schriftgröße", async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage([400, 400]);
+    const output = await exportFilledPdf(
+      await doc.save(),
+      [withFontSize(field({}), 20)],
+      { f1: "Groß" },
+      { flattenForm: false },
+    );
+    const content = await (
+      await (await pdfjs.getDocument({ data: output }).promise).getPage(1)
+    ).getTextContent();
+    const item = content.items.find((entry) => "str" in entry && entry.str === "Groß") as
+      { transform: number[] } | undefined;
+    expect(item).toBeDefined();
+    expect(Math.abs(item!.transform[3])).toBeCloseTo(20, 1);
   });
 
   it("verkleinert zu lange Texte, statt über das Feld hinauszuschreiben", async () => {
@@ -132,5 +163,40 @@ describe("exportFilledPdf", () => {
     const source = await doc.save();
     const output = await exportFilledPdf(source, [field({})], {}, { flattenForm: false });
     expect(output).toBe(source);
+  });
+});
+
+describe("withFontSize", () => {
+  const base: FillField = {
+    id: "f",
+    pageIndex: 0,
+    x: 10,
+    y: 100,
+    width: 200,
+    height: 18,
+    kind: "text",
+    source: "erkannt",
+    label: "Name",
+    multiline: false,
+    onLine: true,
+  };
+
+  it("lässt Felder auf einer Linie nach oben wachsen, damit der Text auf der Linie bleibt", () => {
+    const bigger = withFontSize(base, 24);
+    expect(bigger.fontSize).toBe(24);
+    expect(bigger.y + bigger.height).toBeCloseTo(base.y + base.height);
+    expect(bigger.height).toBeGreaterThanOrEqual(24);
+    // Grundlinie bleibt knapp über der Linie
+    expect(bigger.y + firstBaseline(bigger, 24)).toBeLessThan(base.y + base.height);
+    expect(bigger.y + firstBaseline(bigger, 24)).toBeGreaterThan(base.y + base.height - 5);
+  });
+
+  it("begrenzt die Schriftgröße", () => {
+    expect(withFontSize(base, 1).fontSize).toBe(5);
+    expect(withFontSize(base, 100).fontSize).toBe(36);
+  });
+
+  it("verkleinert ohne das Feld zu verschieben", () => {
+    expect(withFontSize(base, 8)).toMatchObject({ y: 100, height: 18, fontSize: 8 });
   });
 });
