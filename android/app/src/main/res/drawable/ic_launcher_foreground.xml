@@ -1,10 +1,32 @@
+<!-- Gleiches Motiv wie assets/app-icon.svg: kräftiges C mit goldener Krone.
+     Das 1024er-Raster wird auf die sichtbaren 72 dp des adaptiven Icons skaliert. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF"
-        android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M36,36 L36,25 L47,32 L54,19 L61,32 L72,25 L72,36 M40,41 L68,41" />
-    <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF"
-        android:strokeWidth="12" android:strokeLineCap="round"
-        android:pathData="M72,58 C67,50 58,47 49,50 C38,54 33,66 37,77 C41,88 54,93 65,88 C69,86 72,83 74,79" />
-    <path android:fillColor="#E52535" android:pathData="M54,29 L58,35 L50,35 Z" />
+    <group android:translateX="18" android:translateY="18"
+        android:scaleX="0.0703125" android:scaleY="0.0703125">
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF"
+            android:strokeWidth="120" android:strokeLineCap="round"
+            android:pathData="M670,480 A215,215 0 1,0 670,720" />
+        <path android:strokeColor="#A86F00" android:strokeWidth="10" android:strokeLineJoin="round"
+            android:pathData="M300,340 L280,170 L410,250 L512,120 L614,250 L744,170 L724,340 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="0" android:startY="120"
+                    android:endX="0" android:endY="340"
+                    android:startColor="#FFE08A" android:endColor="#F0A500" />
+            </aapt:attr>
+        </path>
+        <path android:strokeColor="#A86F00" android:strokeWidth="10"
+            android:pathData="M314,330 H710 A14,14 0 0,1 724,344 V356 A14,14 0 0,1 710,370 H314 A14,14 0 0,1 300,356 V344 A14,14 0 0,1 314,330 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="0" android:startY="330"
+                    android:endX="0" android:endY="370"
+                    android:startColor="#FFE08A" android:endColor="#F0A500" />
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#E52535"
+            android:pathData="M482,230 A30,30 0 1,0 542,230 A30,30 0 1,0 482,230 Z" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M382,300 A18,18 0 1,0 418,300 A18,18 0 1,0 382,300 Z M606,300 A18,18 0 1,0 642,300 A18,18 0 1,0 606,300 Z" />
+    </group>
 </vector>
