@@ -1,12 +1,27 @@
 ﻿import { degrees, PDFDocument, StandardFonts, rgb } from "@cantoo/pdf-lib";
 import type { CancellationToken } from "../types";
 import { hexToRgb, mmToPt, SimpleCancellation, yieldToUi } from "../utils";
+import { editorPointToPdf } from "./annotate";
 import { loadPdfDocument, saveDocument } from "./loadDocument";
+import { canvasToBytes } from "./pdfjs";
 
 export const A4_PORTRAIT: [number, number] = [595.28, 841.89];
 export const LETTER_PORTRAIT: [number, number] = [612, 792];
 
-/** Kopiert Seiten in einer neuen Reihenfolge und setzt absolute Rotationen. */
+function normalizeAngle(angle: number): number {
+  return ((angle % 360) + 360) % 360;
+}
+
+/**
+ * Dreht eine kopierte Seite um `delta` Grad zusätzlich zur bereits im PDF
+ * hinterlegten /Rotate-Angabe. Die Vorschau zeigt Seiten inklusive ihrer
+ * ursprünglichen Drehung an – der Export muss daher relativ drehen.
+ */
+function rotatePageBy(page: ReturnType<PDFDocument["getPage"]>, delta: number): void {
+  page.setRotation(degrees(normalizeAngle(page.getRotation().angle + delta)));
+}
+
+/** Kopiert Seiten in einer neuen Reihenfolge und dreht sie relativ zur Originaldrehung. */
 export async function buildOrganizedPdf(
   sourceBytes: Uint8Array,
   items: Array<{ pageIndex: number; rotation: number }>,
@@ -18,7 +33,7 @@ export async function buildOrganizedPdf(
     items.map((item) => item.pageIndex),
   );
   copied.forEach((page, index) => {
-    page.setRotation(degrees(items[index].rotation));
+    rotatePageBy(page, items[index].rotation);
     target.addPage(page);
   });
   return saveDocument(target);
@@ -34,25 +49,35 @@ export async function buildMultiSourcePdf(
   onProgress?: (percent: number) => void,
 ): Promise<Uint8Array> {
   const target = await PDFDocument.create();
-  const loadedSources = new Map<string, PDFDocument>();
 
-  for (let index = 0; index < items.length; index++) {
-    const item = items[index];
-    let source = loadedSources.get(item.docId);
-    if (!source) {
-      const bytes = sources.get(item.docId);
-      if (!bytes) throw new Error(`Quelldokument ${item.docId} nicht gefunden.`);
-      source = await loadPdfDocument(bytes);
-      loadedSources.set(item.docId, source);
-    }
-    const [copiedPage] = await target.copyPages(source, [item.pageIndex]);
-    copiedPage.setRotation(degrees(item.rotation % 360));
-    target.addPage(copiedPage);
-    if (index % 10 === 0) {
-      onProgress?.(Math.round((index / Math.max(1, items.length)) * 100));
-      await yieldToUi();
-    }
+  // Pro Quelldokument nur einmal kopieren: So werden gemeinsam genutzte
+  // Ressourcen (Schriften, Bilder) nicht für jede Seite erneut eingebettet.
+  const positionsByDoc = new Map<string, number[]>();
+  items.forEach((item, position) => {
+    positionsByDoc.set(item.docId, [...(positionsByDoc.get(item.docId) ?? []), position]);
+  });
+
+  const copiedPages: Array<ReturnType<PDFDocument["getPage"]>> = new Array(items.length);
+  let processedDocs = 0;
+  for (const [docId, positions] of positionsByDoc) {
+    const bytes = sources.get(docId);
+    if (!bytes) throw new Error(`Quelldokument ${docId} nicht gefunden.`);
+    const source = await loadPdfDocument(bytes);
+    const copied = await target.copyPages(
+      source,
+      positions.map((position) => items[position].pageIndex),
+    );
+    copied.forEach((page, index) => {
+      const position = positions[index];
+      rotatePageBy(page, items[position].rotation);
+      copiedPages[position] = page;
+    });
+    processedDocs += 1;
+    onProgress?.(Math.round((processedDocs / positionsByDoc.size) * 90));
+    await yieldToUi();
   }
+
+  for (const page of copiedPages) target.addPage(page);
   onProgress?.(100);
   return saveDocument(target);
 }
@@ -143,21 +168,49 @@ export async function addPageNumbers(
 
   doc.getPages().forEach((page, index) => {
     const label = formatNumberLabel(options, options.startAt + index, total);
-    const { width, height } = page.getSize();
+    const { width, height } = visiblePageSize(page);
     const textWidth = font.widthOfTextAtSize(label, options.fontSize);
     let x = margin;
     if (options.position.endsWith("mitte")) x = (width - textWidth) / 2;
     if (options.position.endsWith("rechts")) x = width - margin - textWidth;
-    const y = options.position.startsWith("oben") ? height - margin - options.fontSize : margin;
-    page.drawText(label, {
-      x,
-      y,
+    const baselineFromTop = options.position.startsWith("oben")
+      ? margin + options.fontSize
+      : height - margin;
+    drawVisibleText(page, label, x, baselineFromTop, {
       size: options.fontSize,
       font,
       color: rgb(color.r, color.g, color.b),
     });
   });
   return saveDocument(doc);
+}
+
+type PdfPage = ReturnType<PDFDocument["getPage"]>;
+
+/** Größe der Seite, wie sie angezeigt wird (CropBox, inkl. /Rotate). */
+function visiblePageSize(page: PdfPage): { width: number; height: number } {
+  const box = page.getCropBox();
+  const rotation = normalizeAngle(page.getRotation().angle);
+  return rotation === 90 || rotation === 270
+    ? { width: box.height, height: box.width }
+    : { width: box.width, height: box.height };
+}
+
+/**
+ * Zeichnet Text in Anzeige-Koordinaten (x von links, Grundlinie von oben),
+ * sodass er auch auf gedrehten oder zugeschnittenen Seiten aufrecht und an der
+ * sichtbaren Position erscheint.
+ */
+function drawVisibleText(
+  page: PdfPage,
+  text: string,
+  x: number,
+  baselineFromTop: number,
+  style: Omit<NonNullable<Parameters<PdfPage["drawText"]>[1]>, "x" | "y" | "rotate">,
+): void {
+  const rotation = normalizeAngle(page.getRotation().angle) as 0 | 90 | 180 | 270;
+  const point = editorPointToPdf(page.getCropBox(), x, baselineFromTop, rotation);
+  page.drawText(text, { ...style, ...point, rotate: degrees(rotation) });
 }
 
 export interface HeaderFooterOptions {
@@ -181,10 +234,10 @@ export async function addHeaderFooter(
   const total = doc.getPageCount();
 
   doc.getPages().forEach((page, index) => {
-    const { width, height } = page.getSize();
+    const { width, height } = visiblePageSize(page);
     const rows: Array<{ spec: HeaderFooterOptions["top"]; y: number }> = [
-      { spec: options.top, y: height - margin - options.fontSize },
-      { spec: options.bottom, y: margin },
+      { spec: options.top, y: margin + options.fontSize },
+      { spec: options.bottom, y: height - margin },
     ];
     for (const row of rows) {
       if (!row.spec) continue;
@@ -199,9 +252,7 @@ export async function addHeaderFooter(
           .replace(PAGE_TOKEN, String(index + 1))
           .replace(/\{total\}/gi, String(total));
         const textWidth = font.widthOfTextAtSize(text, options.fontSize);
-        page.drawText(text, {
-          x: xFor(textWidth),
-          y: row.y,
+        drawVisibleText(page, text, xFor(textWidth), row.y, {
           size: options.fontSize,
           font,
           color: rgb(color.r, color.g, color.b),
@@ -269,7 +320,10 @@ export async function addWatermark(
     // CSS dreht wegen der nach unten laufenden Y-Achse in die entgegengesetzte Richtung
     // zum PDF-Koordinatensystem. Für einen identischen visuellen Winkel wird das Vorzeichen
     // beim Export daher umgekehrt.
-    const pdfRotationDegrees = -options.rotationDegrees;
+    // Bei Seiten mit /Rotate wird zusätzlich deren Drehung addiert, damit das
+    // Wasserzeichen in der Anzeige denselben Winkel hat wie in der Vorschau.
+    const pdfRotationDegrees = normalizeAngle(page.getRotation().angle) - options.rotationDegrees;
+    const visibleSize = visiblePageSize(page);
     if (options.kind === "text" && font && color) {
       const textWidth = font.widthOfTextAtSize(options.text, options.fontSize);
       const position = centeredRotatedPosition(
@@ -289,9 +343,9 @@ export async function addWatermark(
     }
 
     if (options.kind === "image" && image) {
-      const requestedWidth = visibleBox.width * (options.scalePercent / 100);
+      const requestedWidth = visibleSize.width * (options.scalePercent / 100);
       const requestedHeight = requestedWidth * (image.height / image.width);
-      const fitFactor = Math.min(1, visibleBox.height / requestedHeight);
+      const fitFactor = Math.min(1, visibleSize.height / requestedHeight);
       const imageWidth = requestedWidth * fitFactor;
       const imageHeight = requestedHeight * fitFactor;
       const position = centeredRotatedPosition(
@@ -372,31 +426,60 @@ export async function resizePages(
 }
 
 /**
- * Rastert betroffene Seiten vollständig und ersetzt den Inhalt.
+ * Rastert die betroffenen Seiten vollständig und ersetzt deren Inhalt.
  * Dadurch werden geschwärzte Inhalte physisch aus der Datei entfernt.
+ * Alle übrigen Seiten werden unverändert in der ursprünglichen Reihenfolge übernommen.
  */
 export async function redactPages(
+  sourceBytes: Uint8Array,
   jsDoc: import("pdfjs-dist").PDFDocumentProxy,
   rectsPerPage: Record<number, Array<{ x: number; y: number; width: number; height: number }>>,
   renderWidthPx: number,
   onProgress?: (percent: number) => void,
   token: CancellationToken = new SimpleCancellation(),
 ): Promise<Uint8Array> {
-  const target = await PDFDocument.create();
-  const affectedPages = Object.keys(rectsPerPage)
-    .map(Number)
-    .filter((pageIndex) => rectsPerPage[pageIndex]?.length > 0)
-    .sort((a, b) => a - b);
+  const affectedPages = new Set(
+    Object.keys(rectsPerPage)
+      .map(Number)
+      .filter((pageIndex) => rectsPerPage[pageIndex]?.length > 0),
+  );
 
-  if (affectedPages.length === 0) {
+  if (affectedPages.size === 0) {
     throw new Error(
       "Keine Schwärzungen vorhanden. Ziehe zuerst Rechtecke über die sensiblen Bereiche.",
     );
   }
 
+  const target = await PDFDocument.create();
+  const pageCount = jsDoc.numPages;
+
+  // Unveränderte Seiten in einem Schritt kopieren. Lässt sich das Original mit
+  // pdf-lib nicht öffnen (z. B. verschlüsselt), werden ersatzweise alle Seiten
+  // gerastert – so geht keine Seite verloren.
+  const keptIndices = Array.from({ length: pageCount }, (_, index) => index).filter(
+    (index) => !affectedPages.has(index),
+  );
+  const keptPages = new Map<number, PdfPage>();
+  if (keptIndices.length > 0) {
+    try {
+      const source = await loadPdfDocument(sourceBytes);
+      const copied = await target.copyPages(source, keptIndices);
+      copied.forEach((page, index) => keptPages.set(keptIndices[index], page));
+    } catch {
+      keptPages.clear();
+    }
+  }
+
+  const pagesToRasterize = pageCount - keptPages.size;
   let done = 0;
-  for (const pageIndex of affectedPages) {
+  for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     token.throwIfCancelled();
+    const kept = keptPages.get(pageIndex);
+    if (kept) {
+      target.addPage(kept);
+      continue;
+    }
+
     const page = await jsDoc.getPage(pageIndex + 1);
     const base = page.getViewport({ scale: 1 });
     const scale = renderWidthPx / base.width;
@@ -404,37 +487,29 @@ export async function redactPages(
     const canvas = document.createElement("canvas");
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvas-2D-Kontext nicht verfügbar.");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    try {
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas-2D-Kontext nicht verfügbar.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
 
-    context.fillStyle = "#000000";
-    for (const rect of rectsPerPage[pageIndex]) {
-      context.fillRect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale);
+      context.fillStyle = "#000000";
+      for (const rect of rectsPerPage[pageIndex] ?? []) {
+        context.fillRect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale);
+      }
+      page.cleanup();
+
+      const jpegBytes = await canvasToBytes(canvas, "image/jpeg", 0.92);
+      const image = await target.embedJpg(jpegBytes);
+      const newPage = target.addPage([base.width, base.height]);
+      newPage.drawImage(image, { x: 0, y: 0, width: base.width, height: base.height });
+    } finally {
+      canvas.width = 0;
+      canvas.height = 0;
     }
-    page.cleanup();
-
-    const jpegBytes = await new Promise<Uint8Array>((resolve, reject) => {
-      canvas.toBlob(
-        async (blob) => {
-          if (!blob) {
-            reject(new Error("Rendern fehlgeschlagen."));
-            return;
-          }
-          resolve(new Uint8Array(await blob.arrayBuffer()));
-        },
-        "image/jpeg",
-        0.92,
-      );
-    });
-
-    const image = await target.embedJpg(jpegBytes);
-    const newPage = target.addPage([base.width, base.height]);
-    newPage.drawImage(image, { x: 0, y: 0, width: base.width, height: base.height });
     done += 1;
-    onProgress?.(Math.round((done / affectedPages.length) * 100));
+    onProgress?.(Math.round((done / pagesToRasterize) * 100));
     await yieldToUi();
   }
   return saveDocument(target);

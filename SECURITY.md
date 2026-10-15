@@ -31,7 +31,7 @@ Alle grün gekennzeichneten Werkzeuge verarbeiten Dokumente ausschließlich im B
 
 ### Verschlüsselung der Unterschriftenspeicherung
 
-Gespeicherte Unterschriften liegen AES-256-GCM-verschlüsselt in IndexedDB. Der lokale Speicher wird automatisch geöffnet, sodass zum Unterschreiben keine Passworteingabe erforderlich ist.
+Gespeicherte Unterschriften liegen AES-256-GCM-verschlüsselt in IndexedDB. Der lokale Speicher wird automatisch geöffnet, sodass zum Unterschreiben keine Passworteingabe erforderlich ist. Da der Schlüssel ohne Benutzergeheimnis aus einem festen Wert und einem lokal gespeicherten Salt abgeleitet wird, verhindert die Verschlüsselung lediglich, dass die Bilder im Klartext in der Datenbank stehen. Wer Zugriff auf das Browserprofil hat (andere Nutzer des Geräts, Schadsoftware, Skripte auf derselben Origin), kann die Unterschriften wiederherstellen. Auf gemeinsam genutzten Geräten sollten Unterschriften daher nach Gebrauch gelöscht werden.
 
 ### Serververarbeitung (optional)
 

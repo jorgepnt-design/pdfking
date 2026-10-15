@@ -53,6 +53,13 @@ export default function PdfReaderPage() {
   const [viewerWidth, setViewerWidth] = useState(760);
   const [rendering, setRendering] = useState(false);
   const [viewerError, setViewerError] = useState<Error | null>(null);
+  // Beim Wechsel der Datei Anzeige und Fehler direkt während des Renderns zurücksetzen.
+  const [documentSource, setDocumentSource] = useState(loaded.file);
+  if (documentSource !== loaded.file) {
+    setDocumentSource(loaded.file);
+    setDocument(null);
+    setViewerError(null);
+  }
   const [formFields, setFormFields] = useState<FormFieldInfo[]>([]);
   const [formValues, setFormValues] = useState<FormValues>({});
   const [formMode, setFormMode] = useState(false);
@@ -63,7 +70,9 @@ export default function PdfReaderPage() {
   const openFilesRef = useRef(loaded.openFiles);
   const renderQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-  openFilesRef.current = loaded.openFiles;
+  useEffect(() => {
+    openFilesRef.current = loaded.openFiles;
+  });
 
   useEffect(() => {
     if (!window.launchQueue) return;
@@ -79,16 +88,20 @@ export default function PdfReaderPage() {
     if (!android) return;
     const encoded = android.consumeIncomingPdfBase64();
     if (!encoded) return;
-    try {
-      const binary = window.atob(encoded);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-      const name = android.getIncomingPdfName() || "dokument.pdf";
-      void openFilesRef.current([new File([bytes], name, { type: "application/pdf" })]);
-      android.clearIncomingPdf();
-    } catch {
-      setViewerError(new Error("Die von Android übergebene PDF konnte nicht geöffnet werden."));
-    }
+    void (async () => {
+      try {
+        const binary = window.atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        const name = android.getIncomingPdfName() || "dokument.pdf";
+        android.clearIncomingPdf();
+        await openFilesRef.current([new File([bytes], name, { type: "application/pdf" })]);
+      } catch {
+        setViewerError(new Error("Die von Android übergebene PDF konnte nicht geöffnet werden."));
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -104,8 +117,6 @@ export default function PdfReaderPage() {
   useEffect(() => {
     let cancelled = false;
     let destroy: (() => Promise<void>) | undefined;
-    setDocument(null);
-    setViewerError(null);
     if (!loaded.file) return;
 
     void loadPdfJsDocument(loaded.file.bytes)
@@ -303,9 +314,7 @@ export default function PdfReaderPage() {
           {formMode ? (
             <section className="space-y-4 rounded-xl border border-green-200 bg-green-50/60 p-5 dark:border-green-900 dark:bg-green-950/20">
               <div>
-                <h2 className="font-semibold text-slate-900 dark:text-white">
-                  Formular ausfüllen
-                </h2>
+                <h2 className="font-semibold text-slate-900 dark:text-white">Formular ausfüllen</h2>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                   {formFields.length} ausfüllbare{formFields.length === 1 ? "s Feld" : " Felder"}
                   erkannt.
@@ -393,9 +402,7 @@ export default function PdfReaderPage() {
               variant="secondary"
               aria-label="Nächste Seite"
               disabled={!document || page >= document.numPages - 1}
-              onClick={() =>
-                setPage((value) => Math.min((document?.numPages ?? 1) - 1, value + 1))
-              }
+              onClick={() => setPage((value) => Math.min((document?.numPages ?? 1) - 1, value + 1))}
             >
               <ChevronRight aria-hidden className="h-4 w-4" />
             </Button>

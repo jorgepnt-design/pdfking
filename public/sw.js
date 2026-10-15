@@ -1,6 +1,13 @@
 /* CoroaPDF Service Worker – eingeschränkte Offline-Nutzung der App-Shell. */
-const CACHE_VERSION = "coroapdf-v6";
+const CACHE_VERSION = "coroapdf-v7";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+
+/** Nur erfolgreiche Antworten cachen – sonst würden 404/500 dauerhaft ausgeliefert. */
+function cacheIfOk(request, response) {
+  if (!response.ok) return;
+  const copy = response.clone();
+  caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -33,8 +40,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          cacheIfOk(request, response);
           return response;
         })
         .catch(() => caches.match(request).then((cached) => cached ?? caches.match("/"))),
@@ -56,8 +62,7 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ??
           fetch(request).then((response) => {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+            cacheIfOk(request, response);
             return response;
           }),
       ),
@@ -72,8 +77,7 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ??
           fetch(request).then((response) => {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+            cacheIfOk(request, response);
             return response;
           }),
       ),

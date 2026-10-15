@@ -5,6 +5,8 @@ export const runtime = "nodejs";
 
 const ALLOWED_FORMATS = new Set(["pdf-docx-hq", "docx-pdf", "pptx-pdf", "xlsx-pdf"]);
 const MAX_UPLOAD_BYTES = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB ?? 100) * 1024 * 1024;
+const MULTIPART_OVERHEAD = 64 * 1024;
+const UPSTREAM_TIMEOUT_MS = 120_000;
 
 /**
  * Optionaler Proxy zu einem externen Konvertierungsdienst.
@@ -35,6 +37,13 @@ export async function POST(request: Request, context: { params: Promise<{ format
     );
   }
 
+  // Größenlimit vor dem Einlesen prüfen, damit übergroße Uploads nicht erst
+  // vollständig im Arbeitsspeicher landen. Multipart-Overhead großzügig einrechnen.
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD) {
+    return NextResponse.json({ error: "Datei überschreitet das Upload-Limit." }, { status: 413 });
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -57,6 +66,7 @@ export async function POST(request: Request, context: { params: Promise<{ format
     const upstream = await fetch(`${backendUrl.replace(/\/$/, "")}/convert/${format}`, {
       method: "POST",
       body: forward,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       headers: process.env.SERVER_PROCESSING_TOKEN
         ? { Authorization: `Bearer ${process.env.SERVER_PROCESSING_TOKEN}` }
         : undefined,

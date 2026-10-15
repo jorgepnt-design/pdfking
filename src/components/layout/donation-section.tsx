@@ -1,14 +1,13 @@
 "use client";
 
 import { Coffee, ExternalLink, Heart } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useClientValue } from "@/hooks/useClientValue";
 
 export function DonationSection() {
-  const [nativeAndroid, setNativeAndroid] = useState(false);
-
-  useEffect(() => {
-    setNativeAndroid(navigator.userAgent.includes("CoroaPDFAndroid"));
-  }, []);
+  const nativeAndroid = useClientValue(
+    () => navigator.userAgent.includes("CoroaPDFAndroid"),
+    false,
+  );
 
   if (nativeAndroid) return null;
 
