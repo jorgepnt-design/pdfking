@@ -1,6 +1,6 @@
 import type { CompressionLevel, CompressionOptions, CompressionResult } from "../types";
 import { SimpleCancellation, yieldToUi } from "../utils";
-import { loadPdfDocument, saveDocument } from "./loadDocument";
+import { applyMetadata, getDocumentInfo, loadPdfDocument, saveDocument } from "./loadDocument";
 import { canvasToBytes, loadPdfJsDocument, renderPageToOffscreenCanvas } from "./pdfjs";
 import { stripMetadata } from "./security";
 import { PDFDocument } from "@cantoo/pdf-lib";
@@ -27,6 +27,18 @@ function applyGrayscale(canvas: HTMLCanvasElement): void {
     data[index + 2] = gray;
   }
   context.putImageData(imageData, 0, 0);
+}
+
+async function copyMetadata(sourceBytes: Uint8Array, target: PDFDocument): Promise<void> {
+  try {
+    const source = await loadPdfDocument(sourceBytes);
+    const info = getDocumentInfo(source);
+    applyMetadata(target, info);
+    if (info.creationDate) target.setCreationDate(info.creationDate);
+    if (info.modificationDate) target.setModificationDate(info.modificationDate);
+  } catch {
+    // Metadaten sind optional; die Komprimierung soll daran nicht scheitern.
+  }
 }
 
 /**
@@ -62,10 +74,14 @@ export async function compressPdf(
   try {
     for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
       token.throwIfCancelled();
+      const source = await jsDoc.getPage(pageIndex + 1);
+      const base = source.getViewport({ scale: 1 });
+      // Zielauflösung an der tatsächlichen Seitenbreite ausrichten, damit die
+      // angegebene DPI-Zahl auch für A3-, Quer- oder Sonderformate stimmt.
       let canvas = await renderPageToOffscreenCanvas(
         jsDoc,
         pageIndex,
-        Math.round(612 * settings.dpiScale),
+        Math.round(base.width * settings.dpiScale),
       );
       if (options.grayscale) applyGrayscale(canvas);
       const jpegBytes = await canvasToBytes(canvas, "image/jpeg", settings.quality);
@@ -75,8 +91,6 @@ export async function compressPdf(
       canvas = null as unknown as HTMLCanvasElement;
 
       const image = await target.embedJpg(jpegBytes);
-      const source = await jsDoc.getPage(pageIndex + 1);
-      const base = source.getViewport({ scale: 1 });
       const newPage = target.addPage([base.width, base.height]);
       newPage.drawImage(image, { x: 0, y: 0, width: base.width, height: base.height });
       onProgress?.(Math.round(((pageIndex + 1) / pageCount) * 95));
@@ -90,6 +104,9 @@ export async function compressPdf(
       target.setKeywords([]);
       target.setCreator("");
       target.setProducer("");
+    } else {
+      // Das gerasterte Dokument ist neu aufgebaut – Metadaten des Originals übernehmen.
+      await copyMetadata(bytes, target);
     }
     const saved = await target.save({ useObjectStreams: true });
     onProgress?.(100);

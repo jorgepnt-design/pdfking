@@ -692,7 +692,7 @@ function RedactTab() {
         }));
       }
 
-      const bytes = await redactPages(jsDoc, rectsInPoints, 1800, report, token);
+      const bytes = await redactPages(source.bytes, jsDoc, rectsInPoints, 1800, report, token);
       setResultBytes(bytes);
       return bytes;
     });
